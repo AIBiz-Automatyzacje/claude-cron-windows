@@ -105,11 +105,16 @@ function proxyToVps(req, res, targetPath) {
     });
   });
 
+  let responded = false;
   proxy.on('error', (err) => {
+    if (responded) return;
+    responded = true;
     error(res, `VPS unreachable: ${err.message}`, 502);
   });
 
   proxy.on('timeout', () => {
+    if (responded) return;
+    responded = true;
     proxy.destroy();
     error(res, 'VPS timeout', 504);
   });
