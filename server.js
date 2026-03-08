@@ -174,8 +174,11 @@ async function handleApi(req, res) {
   // POST /api/jobs
   if (method === 'POST' && urlPath === '/api/jobs') {
     const body = await parseBody(req);
-    if (!body.name || !body.skill_name || !body.cron_expr) {
-      return error(res, 'name, skill_name, and cron_expr are required');
+    if (!body.name || !body.cron_expr) {
+      return error(res, 'name and cron_expr are required');
+    }
+    if (!body.skill_name && !body.arguments) {
+      return error(res, 'skill_name or arguments (prompt) is required');
     }
     const job = db.createJob(body);
     scheduler.scheduleJob(job);

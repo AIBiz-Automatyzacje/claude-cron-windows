@@ -306,7 +306,7 @@ function renderJobs() {
   body.innerHTML = allJobs.map(j => `
     <tr>
       <td><strong>${esc(j.name)}</strong></td>
-      <td><code>/${esc(j.skill_name)}</code></td>
+      <td><code>${j.skill_name ? '/' + esc(j.skill_name) : esc(j.arguments || 'prompt')}</code></td>
       <td>${esc(cronToHuman(j.cron_expr))}</td>
       <td>
         ${j.enabled && j.next_run
