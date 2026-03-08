@@ -1,0 +1,310 @@
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const { PORT, PUBLIC_DIR, VPS_API_URL } = require('./lib/config');
+const db = require('./lib/db');
+const scheduler = require('./lib/scheduler');
+const executor = require('./lib/executor');
+const skills = require('./lib/skills');
+const platform = require('./lib/platform');
+
+// === MIME types ===
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+};
+
+// === Helpers ===
+
+function json(res, data, status = 200) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(data));
+}
+
+function error(res, msg, status = 400) {
+  json(res, { error: msg }, status);
+}
+
+async function parseBody(req) {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try { resolve(JSON.parse(body)); }
+      catch { resolve({}); }
+    });
+  });
+}
+
+function serveStatic(res, urlPath) {
+  let filePath = path.join(PUBLIC_DIR, urlPath === '/' ? 'index.html' : urlPath);
+  filePath = path.normalize(filePath);
+
+  // Prevent directory traversal
+  if (!filePath.startsWith(PUBLIC_DIR)) {
+    error(res, 'Forbidden', 403);
+    return;
+  }
+
+  if (!fs.existsSync(filePath)) {
+    // SPA fallback
+    filePath = path.join(PUBLIC_DIR, 'index.html');
+  }
+
+  const ext = path.extname(filePath);
+  const mime = MIME[ext] || 'application/octet-stream';
+
+  try {
+    const content = fs.readFileSync(filePath);
+    res.writeHead(200, { 'Content-Type': mime });
+    res.end(content);
+  } catch {
+    error(res, 'Not found', 404);
+  }
+}
+
+// === Router ===
+
+function matchRoute(method, url) {
+  const [pathPart, queryString] = url.split('?');
+  const params = new URLSearchParams(queryString || '');
+  const segments = pathPart.split('/').filter(Boolean);
+
+  // Parse path params
+  // /api/jobs/:id -> segments = ['api', 'jobs', '123']
+  return { method, path: pathPart, segments, params };
+}
+
+// === VPS Proxy ===
+function proxyToVps(req, res, targetPath) {
+  if (!VPS_API_URL) {
+    return error(res, 'VPS not configured (set CLAUDE_CRON_VPS_URL)', 503);
+  }
+
+  const url = new URL(targetPath, VPS_API_URL);
+  const options = {
+    hostname: url.hostname,
+    port: url.port,
+    path: url.pathname + url.search,
+    method: req.method,
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 10000,
+  };
+
+  const proxy = http.request(options, (proxyRes) => {
+    let body = '';
+    proxyRes.on('data', chunk => body += chunk);
+    proxyRes.on('end', () => {
+      res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(body);
+    });
+  });
+
+  proxy.on('error', (err) => {
+    error(res, `VPS unreachable: ${err.message}`, 502);
+  });
+
+  proxy.on('timeout', () => {
+    proxy.destroy();
+    error(res, 'VPS timeout', 504);
+  });
+
+  if (req.method !== 'GET' && req.method !== 'DELETE') {
+    let reqBody = '';
+    req.on('data', chunk => reqBody += chunk);
+    req.on('end', () => proxy.end(reqBody));
+  } else {
+    proxy.end();
+  }
+}
+
+async function handleApi(req, res) {
+  const { method, path: urlPath, segments, params } = matchRoute(req.method, req.url);
+
+  // GET /api/env — environment info
+  if (method === 'GET' && urlPath === '/api/env') {
+    return json(res, { vps_configured: !!VPS_API_URL });
+  }
+
+  // Proxy /api/vps/* -> VPS instance /api/*
+  if (urlPath.startsWith('/api/vps/')) {
+    const targetPath = '/api/' + urlPath.slice('/api/vps/'.length);
+    const qs = req.url.includes('?') ? '?' + req.url.split('?')[1] : '';
+    return proxyToVps(req, res, targetPath + qs);
+  }
+
+  // GET /api/skills
+  if (method === 'GET' && urlPath === '/api/skills') {
+    return json(res, skills.getAllSkills());
+  }
+
+  // GET /api/status
+  if (method === 'GET' && urlPath === '/api/status') {
+    const currentRun = db.getCurrentRun();
+    const queued = db.getQueuedRuns();
+    const allJobs = db.getAllJobs();
+    const autostart = platform.getStatus();
+
+    return json(res, {
+      uptime: process.uptime(),
+      current_run: currentRun,
+      queue_length: queued.length,
+      total_jobs: allJobs.length,
+      enabled_jobs: allJobs.filter(j => j.enabled).length,
+      autostart,
+    });
+  }
+
+  // GET /api/jobs
+  if (method === 'GET' && urlPath === '/api/jobs') {
+    const jobs = db.getAllJobs();
+    // Enrich with next_run
+    const enriched = jobs.map(j => ({
+      ...j,
+      next_run: scheduler.getNextRun(j.id),
+    }));
+    return json(res, enriched);
+  }
+
+  // POST /api/jobs
+  if (method === 'POST' && urlPath === '/api/jobs') {
+    const body = await parseBody(req);
+    if (!body.name || !body.skill_name || !body.cron_expr) {
+      return error(res, 'name, skill_name, and cron_expr are required');
+    }
+    const job = db.createJob(body);
+    scheduler.scheduleJob(job);
+    return json(res, job, 201);
+  }
+
+  // Routes with :id — /api/jobs/:id
+  if (segments[0] === 'api' && segments[1] === 'jobs' && segments[2]) {
+    const id = parseInt(segments[2], 10);
+    if (isNaN(id)) return error(res, 'Invalid job ID');
+
+    // POST /api/jobs/:id/trigger
+    if (method === 'POST' && segments[3] === 'trigger') {
+      const job = db.getJob(id);
+      if (!job) return error(res, 'Job not found', 404);
+      const run = scheduler.enqueueJob(id, 'manual');
+      return json(res, run);
+    }
+
+    // POST /api/jobs/:id/toggle
+    if (method === 'POST' && segments[3] === 'toggle') {
+      const job = db.toggleJob(id);
+      if (!job) return error(res, 'Job not found', 404);
+      scheduler.scheduleJob(job);
+      return json(res, { ...job, next_run: scheduler.getNextRun(job.id) });
+    }
+
+    // GET /api/jobs/:id
+    if (method === 'GET' && !segments[3]) {
+      const job = db.getJob(id);
+      if (!job) return error(res, 'Job not found', 404);
+      return json(res, { ...job, next_run: scheduler.getNextRun(job.id) });
+    }
+
+    // PUT /api/jobs/:id
+    if (method === 'PUT' && !segments[3]) {
+      const body = await parseBody(req);
+      const job = db.updateJob(id, body);
+      if (!job) return error(res, 'Job not found', 404);
+      scheduler.scheduleJob(job);
+      return json(res, { ...job, next_run: scheduler.getNextRun(job.id) });
+    }
+
+    // DELETE /api/jobs/:id
+    if (method === 'DELETE' && !segments[3]) {
+      scheduler.unscheduleJob(id);
+      db.deleteJob(id);
+      return json(res, { ok: true });
+    }
+  }
+
+  // GET /api/runs
+  if (method === 'GET' && urlPath === '/api/runs') {
+    const limit = parseInt(params.get('limit') || '50', 10);
+    const offset = parseInt(params.get('offset') || '0', 10);
+    const job_id = params.get('job_id') ? parseInt(params.get('job_id'), 10) : undefined;
+    return json(res, db.getRuns({ limit, offset, job_id }));
+  }
+
+  // GET /api/runs/current
+  if (method === 'GET' && urlPath === '/api/runs/current') {
+    return json(res, db.getCurrentRun());
+  }
+
+  // POST /api/runs/current/kill
+  if (method === 'POST' && urlPath === '/api/runs/current/kill') {
+    const killed = executor.killCurrent();
+    return json(res, { killed });
+  }
+
+  // /api/runs with query params
+  if (method === 'GET' && segments[0] === 'api' && segments[1] === 'runs') {
+    const limit = parseInt(params.get('limit') || '50', 10);
+    const offset = parseInt(params.get('offset') || '0', 10);
+    const job_id = params.get('job_id') ? parseInt(params.get('job_id'), 10) : undefined;
+    return json(res, db.getRuns({ limit, offset, job_id }));
+  }
+
+  error(res, 'Not found', 404);
+}
+
+// === Server ===
+
+const server = http.createServer(async (req, res) => {
+  // CORS for dev
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
+
+  try {
+    if (req.url.startsWith('/api/')) {
+      await handleApi(req, res);
+    } else {
+      serveStatic(res, req.url);
+    }
+  } catch (err) {
+    console.error('[server] Error:', err);
+    error(res, 'Internal server error', 500);
+  }
+});
+
+// === Start ===
+
+// Init DB
+db.getDb();
+
+// Start scheduler
+scheduler.start();
+
+server.listen(PORT, () => {
+  console.log(`\n🕹️  CLAUDE-CRON running at http://localhost:${PORT}`);
+  console.log(`   Press Ctrl+C to stop\n`);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n[shutdown] Stopping...');
+  scheduler.stop();
+  db.close();
+  server.close(() => process.exit(0));
+});
+
+process.on('SIGTERM', () => {
+  scheduler.stop();
+  db.close();
+  server.close(() => process.exit(0));
+});

@@ -1,0 +1,19 @@
+{
+  "name": "claude-cron",
+  "version": "1.0.0",
+  "description": "Lokalny scheduler skilli Claude Code z retro arcade UI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "install:mac": "bash scripts/install-macos.sh",
+    "uninstall:mac": "bash scripts/uninstall-macos.sh",
+    "install:win": "powershell -ExecutionPolicy Bypass -File scripts/install-windows.ps1",
+    "uninstall:win": "powershell -ExecutionPolicy Bypass -File scripts/uninstall-windows.ps1",
+    "install:vps": "bash scripts/install-vps.sh"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.0.0",
+    "croner": "^10.0.0",
+    "gray-matter": "^4.0.3"
+  }
+}
