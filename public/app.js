@@ -5,6 +5,7 @@ let jobsMap = {}; // id -> job
 let expandedRuns = new Set(); // track expanded run details
 let currentEnv = 'local'; // 'local' or 'vps'
 let vpsConfigured = false;
+let webhookBaseUrl = ''; // public URL for webhook links (from VPS env)
 
 // === API ===
 function apiBase() {
@@ -605,7 +606,9 @@ function updateWebhookUI(token) {
   if (token) {
     emptyEl.style.display = 'none';
     activeEl.style.display = 'block';
-    urlEl.value = `${location.origin}/webhook/${token}`;
+    // Use VPS webhook_base_url when in VPS mode, otherwise try local env, fallback to location.origin
+    const base = (currentEnv === 'vps' && webhookBaseUrl) ? webhookBaseUrl : (webhookBaseUrl || location.origin);
+    urlEl.value = `${base}/webhook/${token}`;
   } else {
     emptyEl.style.display = 'block';
     activeEl.style.display = 'none';
@@ -668,8 +671,14 @@ async function init() {
   try {
     const env = await fetch('/api/env').then(r => r.json());
     vpsConfigured = env.vps_configured;
+    webhookBaseUrl = env.webhook_base_url || '';
     if (vpsConfigured) {
       document.getElementById('env-toggle').style.display = '';
+      // Fetch VPS webhook_base_url
+      try {
+        const vpsEnv = await fetch('/api/vps/env').then(r => r.json());
+        if (vpsEnv.webhook_base_url) webhookBaseUrl = vpsEnv.webhook_base_url;
+      } catch { /* VPS may be unreachable */ }
     }
   } catch { /* local only */ }
 
