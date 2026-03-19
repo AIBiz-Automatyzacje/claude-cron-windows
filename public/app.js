@@ -312,7 +312,7 @@ function renderJobs() {
       <td>
         <div class="btn-group">
           <button class="btn btn-small btn-primary" onclick="triggerJob(${j.id})" title="Run now">▶</button>
-          <button class="btn btn-small" onclick="toggleJob(${j.id})" title="Toggle">${j.enabled ? '⏸' : '▶'}</button>
+          <button class="btn btn-small ${j.enabled ? 'btn-toggle-on' : 'btn-toggle-off'}" onclick="toggleJob(${j.id})" title="${j.enabled ? 'Disable' : 'Enable'}">${j.enabled ? '⏻' : '⏻'}</button>
           <button class="btn btn-small" onclick="openEditModal(${j.id})" title="Edit">✎</button>
           <button class="btn btn-small btn-danger" onclick="deleteJob(${j.id})" title="Delete">✕</button>
         </div>

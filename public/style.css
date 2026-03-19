@@ -344,6 +344,16 @@ tr:hover {
   line-height: 1;
 }
 
+.btn-toggle-on {
+  border-color: var(--green-dim);
+  color: var(--green);
+}
+
+.btn-toggle-off {
+  border-color: var(--text-dim);
+  color: var(--text-dim);
+}
+
 .btn-group {
   display: flex;
   gap: 6px;
