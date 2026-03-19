@@ -336,8 +336,8 @@ const server = http.createServer(async (req, res) => {
 
     // Block non-webhook requests from non-local sources (Tailscale Funnel etc.)
     // Dashboard/API only accessible from localhost or Tailscale network (100.x.x.x)
-    const remoteIp = req.socket.remoteAddress || '';
-    const isLocal = remoteIp === '127.0.0.1' || remoteIp === '::1' || remoteIp === '::ffff:127.0.0.1' || remoteIp.startsWith('100.');
+    const remoteIp = (req.socket.remoteAddress || '').replace('::ffff:', '');
+    const isLocal = remoteIp === '127.0.0.1' || remoteIp === '::1' || remoteIp.startsWith('100.');
     if (!isLocal) {
       return error(res, 'Dashboard only accessible via Tailscale', 403);
     }
