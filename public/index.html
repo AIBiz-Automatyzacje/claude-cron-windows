@@ -185,6 +185,22 @@
             Discord notification
           </label>
         </div>
+        <div class="webhook-section" id="webhook-section">
+          <div class="webhook-label">WEBHOOK</div>
+          <div id="webhook-empty">
+            <button type="button" class="btn btn-small btn-webhook" onclick="generateWebhook()">🔗 GENERATE WEBHOOK URL</button>
+          </div>
+          <div id="webhook-active" style="display:none">
+            <div class="webhook-url-wrap">
+              <input type="text" id="webhook-url" readonly class="webhook-url-input">
+              <button type="button" class="btn btn-small" onclick="copyWebhookUrl()" title="Copy">📋</button>
+            </div>
+            <div class="webhook-actions">
+              <button type="button" class="btn btn-small" onclick="generateWebhook()">🔄 REGENERATE</button>
+              <button type="button" class="btn btn-small btn-danger" onclick="removeWebhook()">❌ REMOVE</button>
+            </div>
+          </div>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn" onclick="hideModal()">CANCEL</button>
           <button type="submit" class="btn btn-primary">SAVE</button>

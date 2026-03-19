@@ -284,6 +284,12 @@ tr:hover {
   border: 1px solid var(--border);
 }
 
+.badge-webhook {
+  color: var(--cyan);
+  border: 1px solid var(--cyan-dim);
+  text-shadow: 0 0 6px var(--cyan-glow);
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
@@ -672,4 +678,51 @@ tr:hover {
 
 .clickable {
   cursor: pointer;
+}
+
+/* === Webhook Section === */
+.webhook-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.webhook-label {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--cyan);
+  text-shadow: 0 0 6px var(--cyan-glow);
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.btn-webhook {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.btn-webhook:hover {
+  background: rgba(0, 255, 255, 0.1);
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+.webhook-url-wrap {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.webhook-url-input {
+  flex: 1;
+  font-size: 11px !important;
+  color: var(--cyan) !important;
+  background: var(--bg) !important;
+  border: 1px solid var(--cyan-dim) !important;
+  padding: 6px 8px !important;
+  cursor: text;
+}
+
+.webhook-actions {
+  display: flex;
+  gap: 8px;
 }

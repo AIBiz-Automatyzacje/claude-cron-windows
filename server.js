@@ -1,7 +1,8 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { PORT, PUBLIC_DIR, VPS_API_URL } = require('./lib/config');
+const { randomUUID } = require('node:crypto');
+const { PORT, PUBLIC_DIR, VPS_API_URL, WEBHOOK_ENABLED } = require('./lib/config');
 const db = require('./lib/db');
 const scheduler = require('./lib/scheduler');
 const executor = require('./lib/executor');
@@ -203,6 +204,23 @@ async function handleApi(req, res) {
       return json(res, run);
     }
 
+    // POST /api/jobs/:id/webhook — generate/regenerate webhook token
+    if (method === 'POST' && segments[3] === 'webhook') {
+      const job = db.getJob(id);
+      if (!job) return error(res, 'Job not found', 404);
+      const token = randomUUID();
+      const updated = db.setWebhookToken(id, token);
+      return json(res, updated);
+    }
+
+    // DELETE /api/jobs/:id/webhook — remove webhook token
+    if (method === 'DELETE' && segments[3] === 'webhook') {
+      const job = db.getJob(id);
+      if (!job) return error(res, 'Job not found', 404);
+      const updated = db.clearWebhookToken(id);
+      return json(res, updated);
+    }
+
     // POST /api/jobs/:id/toggle
     if (method === 'POST' && segments[3] === 'toggle') {
       const job = db.toggleJob(id);
@@ -265,6 +283,37 @@ async function handleApi(req, res) {
   error(res, 'Not found', 404);
 }
 
+// === Webhook handler ===
+
+async function handleWebhook(req, res, token) {
+  if (!WEBHOOK_ENABLED) {
+    return error(res, 'Webhooks disabled', 403);
+  }
+
+  if (req.method !== 'POST') {
+    return error(res, 'Method not allowed', 405);
+  }
+
+  const job = db.getJobByWebhookToken(token);
+  if (!job) {
+    return error(res, 'Invalid webhook token', 404);
+  }
+
+  const body = await parseBody(req);
+  const payload = JSON.stringify(body);
+
+  const run = db.createRun({
+    job_id: job.id,
+    trigger_type: 'webhook',
+    webhook_payload: payload,
+  });
+
+  scheduler.processQueue();
+
+  console.log(`[webhook] Job "${job.name}" triggered via webhook (run #${run.id})`);
+  return json(res, { ok: true, run_id: run.id, job_name: job.name });
+}
+
 // === Server ===
 
 const server = http.createServer(async (req, res) => {
@@ -279,6 +328,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    // Webhook endpoint: /webhook/:token
+    const webhookMatch = req.url.match(/^\/webhook\/([a-zA-Z0-9_-]+)$/);
+    if (webhookMatch) {
+      return await handleWebhook(req, res, webhookMatch[1]);
+    }
+
     if (req.url.startsWith('/api/')) {
       await handleApi(req, res);
     } else {

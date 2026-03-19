@@ -280,7 +280,7 @@ function renderJobs() {
   empty.style.display = 'none';
   body.innerHTML = allJobs.map(j => `
     <tr>
-      <td><strong>${esc(j.name)}</strong></td>
+      <td><strong>${j.webhook_token ? '🔗 ' : ''}${esc(j.name)}</strong></td>
       <td><code>${j.skill_name ? '/' + esc(j.skill_name) : esc(j.arguments || 'prompt')}</code></td>
       <td>${esc(cronToHuman(j.cron_expr))}</td>
       <td>
@@ -325,7 +325,7 @@ function renderRuns(runs) {
         <td>#${r.id}</td>
         <td>${job ? esc(job.name) : `Job #${r.job_id}`}</td>
         <td><span class="badge ${badgeClass}">${r.status.toUpperCase()}</span></td>
-        <td>${esc(r.trigger_type)}</td>
+        <td><span class="badge ${r.trigger_type === 'webhook' ? 'badge-webhook' : ''}">${esc(r.trigger_type.toUpperCase())}</span></td>
         <td>${formatDateTime(r.started_at)}</td>
         <td>${formatDuration(r.started_at, r.finished_at)}</td>
       </tr>
@@ -428,6 +428,8 @@ function openCreateModal() {
   document.getElementById('form-retries').value = '1';
   document.getElementById('form-wake').checked = false;
   document.getElementById('form-discord').checked = false;
+  updateWebhookUI(null);
+  document.getElementById('webhook-section').style.display = 'none'; // hide for new jobs
   onFreqChange();
   populateSkillSelect();
   showModal();
@@ -444,6 +446,8 @@ function openEditModal(id) {
   document.getElementById('form-retries').value = job.max_retries;
   document.getElementById('form-wake').checked = !!job.run_on_wake;
   document.getElementById('form-discord').checked = !!job.discord_notify;
+  document.getElementById('webhook-section').style.display = 'block';
+  updateWebhookUI(job.webhook_token);
   populateSkillSelect(job.skill_name);
   parseCronToForm(job.cron_expr);
   showModal();
@@ -574,6 +578,63 @@ function formatClaudeOutput(raw) {
   if (!hasJsonLine) return raw;
 
   return parts.length > 0 ? parts.join('\n\n') : raw;
+}
+
+// === Webhook ===
+function updateWebhookUI(token) {
+  const emptyEl = document.getElementById('webhook-empty');
+  const activeEl = document.getElementById('webhook-active');
+  const urlEl = document.getElementById('webhook-url');
+
+  if (token) {
+    emptyEl.style.display = 'none';
+    activeEl.style.display = 'block';
+    urlEl.value = `${location.origin}/webhook/${token}`;
+  } else {
+    emptyEl.style.display = 'block';
+    activeEl.style.display = 'none';
+    urlEl.value = '';
+  }
+}
+
+async function generateWebhook() {
+  const id = document.getElementById('form-id').value;
+  if (!id) return;
+  try {
+    const job = await API.post(`/api/jobs/${id}/webhook`);
+    updateWebhookUI(job.webhook_token);
+    jobsMap[id] = job;
+    toast('Webhook generated!');
+    loadJobs();
+  } catch {
+    toast('Failed to generate webhook', true);
+  }
+}
+
+async function removeWebhook() {
+  const id = document.getElementById('form-id').value;
+  if (!id) return;
+  try {
+    const job = await API.del(`/api/jobs/${id}/webhook`);
+    updateWebhookUI(null);
+    jobsMap[id] = job;
+    toast('Webhook removed');
+    loadJobs();
+  } catch {
+    toast('Failed to remove webhook', true);
+  }
+}
+
+function copyWebhookUrl() {
+  const url = document.getElementById('webhook-url').value;
+  navigator.clipboard.writeText(url).then(() => {
+    toast('URL copied!');
+  }).catch(() => {
+    // Fallback for non-HTTPS
+    document.getElementById('webhook-url').select();
+    document.execCommand('copy');
+    toast('URL copied!');
+  });
 }
 
 // === Polling ===
