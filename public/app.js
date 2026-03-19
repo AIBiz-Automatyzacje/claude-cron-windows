@@ -146,7 +146,8 @@ function onFreqChange() {
   const intervalGroup = document.getElementById('interval-group');
   const intervalSel = document.getElementById('form-interval');
 
-  timeGroup.style.display = (freq === 'hours' || freq === 'minutes') ? 'none' : 'block';
+  const isWebhookOnly = freq === 'webhook_only';
+  timeGroup.style.display = (freq === 'hours' || freq === 'minutes' || isWebhookOnly) ? 'none' : 'block';
   dayGroup.style.display = freq === 'weekly' ? 'block' : 'none';
   intervalGroup.style.display = (freq === 'hours' || freq === 'minutes') ? 'block' : 'none';
 
@@ -171,11 +172,17 @@ function buildCronFromForm() {
     case 'weekly':   return `${mm} ${hh} * * ${day}`;
     case 'hours':    return `0 */${interval} * * *`;
     case 'minutes':  return `*/${interval} * * * *`;
+    case 'webhook_only': return '';
     default:         return `${mm} ${hh} * * *`;
   }
 }
 
 function parseCronToForm(expr) {
+  if (!expr || !expr.trim()) {
+    document.getElementById('form-freq').value = 'webhook_only';
+    onFreqChange();
+    return;
+  }
   const parts = expr.trim().split(/\s+/);
   if (parts.length !== 5) return;
   const [min, hour, , , dow] = parts;
@@ -213,6 +220,11 @@ function parseCronToForm(expr) {
 function updateSchedulePreview() {
   const cron = buildCronFromForm();
   const preview = document.getElementById('schedule-preview');
+  if (!cron) {
+    preview.textContent = 'Uruchamiany tylko przez webhook';
+    preview.style.color = 'var(--cyan)';
+    return;
+  }
   preview.textContent = cronToHuman(cron);
   preview.style.color = 'var(--cyan)';
 }
@@ -278,11 +290,15 @@ function renderJobs() {
   }
 
   empty.style.display = 'none';
-  body.innerHTML = allJobs.map(j => `
+  body.innerHTML = allJobs.map(j => {
+    const hasCron = !!j.cron_expr;
+    const hasWebhook = !!j.webhook_token;
+    const triggerIcons = (hasCron ? '⏰' : '') + (hasWebhook ? '🔗' : '');
+    return `
     <tr>
-      <td><strong>${j.webhook_token ? '🔗 ' : ''}${esc(j.name)}</strong></td>
+      <td><strong>${triggerIcons ? triggerIcons + ' ' : ''}${esc(j.name)}</strong></td>
       <td><code>${j.skill_name ? '/' + esc(j.skill_name) : esc(j.arguments || 'prompt')}</code></td>
-      <td>${esc(cronToHuman(j.cron_expr))}</td>
+      <td>${j.cron_expr ? esc(cronToHuman(j.cron_expr)) : '<span style="color:var(--cyan)">webhook only</span>'}</td>
       <td>
         ${j.enabled && j.next_run
           ? `<span class="next-run">${formatDateTime(j.next_run)}</span><br><span class="countdown">${formatCountdown(j.next_run)}</span>`
@@ -302,7 +318,7 @@ function renderJobs() {
         </div>
       </td>
     </tr>
-  `).join('');
+  `}).join('');
 }
 
 function renderRuns(runs) {
