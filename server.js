@@ -334,11 +334,11 @@ const server = http.createServer(async (req, res) => {
       return await handleWebhook(req, res, webhookMatch[1]);
     }
 
-    // Block non-webhook requests from non-local sources (Tailscale Funnel etc.)
-    // Dashboard/API only accessible from localhost or Tailscale network (100.x.x.x)
-    const remoteIp = (req.socket.remoteAddress || '').replace('::ffff:', '');
-    const isLocal = remoteIp === '127.0.0.1' || remoteIp === '::1' || remoteIp.startsWith('100.');
-    if (!isLocal) {
+    // Block non-webhook requests from external sources (Tailscale Funnel)
+    // Funnel proxies via 127.0.0.1 but sets X-Forwarded-For header
+    // If X-Forwarded-For is present, request came through Funnel = external = block dashboard
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (forwardedFor) {
       return error(res, 'Dashboard only accessible via Tailscale', 403);
     }
 
