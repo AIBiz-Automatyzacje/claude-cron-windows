@@ -2,7 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { PORT, PUBLIC_DIR, VPS_API_URL, WEBHOOK_ENABLED, DASHBOARD_PASSWORD } = require('./lib/config');
+const { PORT, PUBLIC_DIR, VPS_API_URL, WEBHOOK_ENABLED } = require('./lib/config');
 const db = require('./lib/db');
 const scheduler = require('./lib/scheduler');
 const executor = require('./lib/executor');
@@ -328,25 +328,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    // Webhook endpoint: /webhook/:token — public, no auth
+    // Webhook endpoint: /webhook/:token — public, accessible from internet
     const webhookMatch = req.url.match(/^\/webhook\/([a-zA-Z0-9_-]+)$/);
     if (webhookMatch) {
       return await handleWebhook(req, res, webhookMatch[1]);
     }
 
-    // Basic Auth for dashboard/API (if DASHBOARD_PASSWORD is set)
-    if (DASHBOARD_PASSWORD) {
-      const auth = req.headers.authorization;
-      if (!auth || !auth.startsWith('Basic ')) {
-        res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="claude-cron"' });
-        return res.end('Unauthorized');
-      }
-      const credentials = Buffer.from(auth.slice(6), 'base64').toString();
-      const [, pwd] = credentials.split(':');
-      if (pwd !== DASHBOARD_PASSWORD) {
-        res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="claude-cron"' });
-        return res.end('Unauthorized');
-      }
+    // Block non-webhook requests from non-local sources (Tailscale Funnel etc.)
+    // Dashboard/API only accessible from localhost or Tailscale network (100.x.x.x)
+    const remoteIp = req.socket.remoteAddress || '';
+    const isLocal = remoteIp === '127.0.0.1' || remoteIp === '::1' || remoteIp === '::ffff:127.0.0.1' || remoteIp.startsWith('100.');
+    if (!isLocal) {
+      return error(res, 'Dashboard only accessible via Tailscale', 403);
     }
 
     if (req.url.startsWith('/api/')) {
