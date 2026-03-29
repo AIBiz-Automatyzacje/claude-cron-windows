@@ -177,12 +177,16 @@ fi
 # ============ OPTIONAL: VPS CONNECTION ============
 
 echo ""
-ask "Masz VPS z claude-cron? [y/N]: "
+echo -e "  ${YELLOW}Opcjonalne:${NC} Jeśli masz osobną instancję claude-cron na VPS,"
+echo -e "  możesz podłączyć ją do tego dashboardu (toggle LOCAL/VPS)."
+echo -e "  Jeśli nie wiesz o co chodzi — wybierz N."
+echo ""
+ask "Podłączyć zdalny VPS do dashboardu? [y/N]: "
 read -r HAS_VPS
 HAS_VPS="${HAS_VPS:-N}"
 
 if [[ "$HAS_VPS" =~ ^[Yy]$ ]]; then
-  ask "VPS IP or URL (e.g., 100.x.x.x or hostname): "
+  ask "Tailscale IP lub adres VPS (np. 100.x.x.x): "
   read -r VPS_HOST
   VPS_PORT=7777
   ask "VPS port [$VPS_PORT]: "
