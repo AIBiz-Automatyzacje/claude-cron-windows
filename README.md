@@ -1,82 +1,90 @@
 # 🕹️ Claude-Cron
 
-Scheduler for [Claude Code](https://claude.ai/code) — run skills and prompts on a cron schedule, via webhooks, or manually. Retro arcade dashboard included.
+Automatyczny scheduler dla [Claude Code](https://claude.ai/code). Ustawiasz co i kiedy ma się odpalić — Claude robi resztę. Dashboard w stylu retro arcade do zarządzania wszystkim.
 
-![Node.js](https://img.shields.io/badge/Node.js-18%2B-green) ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-blue) ![License](https://img.shields.io/badge/License-MIT-yellow)
+## Co to robi?
 
-## Features
-
-- **Cron scheduling** — run Claude Code skills/prompts on any cron schedule
-- **Webhooks** — trigger jobs from external services (Make, n8n, Zapier, etc.)
-- **Dashboard** — retro arcade UI to manage jobs, view history, browse skills
-- **LOCAL/VPS toggle** — manage both instances from one dashboard
-- **Discord notifications** — get results delivered to a Discord channel
-- **Skills browser** — scans project, user (global), and plugin skills with filters
-- **Wake detection** — missed jobs run automatically after sleep/restart
-- **Idle timeout + watchdog** — stuck jobs killed automatically
-
-## Requirements
-
-- **Node.js 18+** — [nodejs.org](https://nodejs.org)
-- **Claude Code** — `npm install -g @anthropic-ai/claude-code` (must be logged in)
-- **Tailscale** — private network between Mac and VPS ([tailscale.com](https://tailscale.com/download))
+- **Harmonogram** — Claude odpala Twoje skille/prompty o wybranej godzinie (codziennie, co X godzin, w wybrane dni)
+- **Webhoki** — zewnętrzne serwisy (Make, n8n, Zapier) mogą triggerować joby przez link
+- **Dashboard** — przeglądarka, `localhost:7777`, zarządzasz jobami, widzisz historię, przeglądasz skille
+- **VPS 24/7** — joby lecą non-stop na serwerze, nawet gdy śpisz
+- **Powiadomienia Discord** — wynik joba ląduje na Twojego Discorda
 
 ---
 
-## Installation
+## Czego potrzebujesz?
 
-> **Recommended path:** VPS first (24/7 job execution), then Mac (dashboard + proxy).
+Zanim zaczniesz, upewnij się że masz:
+
+1. **Serwer VPS** z Linuxem (np. Hostinger, DigitalOcean) — tu będą lecieć joby 24/7
+2. **Tailscale** zainstalowany na VPS i na Macu — to prywatna sieć łącząca Twoje urządzenia ([pobierz tutaj](https://tailscale.com/download))
+3. **Node.js 18+** na Macu — [pobierz tutaj](https://nodejs.org)
+4. **Claude Code** zainstalowany i zalogowany — w terminalu: `npm install -g @anthropic-ai/claude-code`, potem `claude` żeby się zalogować
+
+---
+
+## Instalacja — krok po kroku
+
+> Najpierw instalujesz na VPS (serwer), potem na Macu (dashboard).
 >
-> *Only want to run locally?* Skip to [Local-only setup](#local-only-setup).
+> *Nie masz VPS-a?* Przejdź do [Instalacja bez VPS-a](#instalacja-bez-vps-a).
 
-### Before you start
+### Zanim zaczniesz
 
-Claude-cron needs a **workspace** on the VPS — a folder where Claude CLI executes jobs. This is typically your Obsidian vault or project directory.
+Claude-cron potrzebuje **folderu roboczego** na VPS-ie — to miejsce, w którym Claude będzie wykonywał zadania. Zazwyczaj to Twój vault Obsidian.
 
-If you already have a vault on the VPS, check its path:
+Jeśli masz już vault na VPS-ie, sprawdź jak się nazywa folder:
 ```bash
 ls /home/claude/
 ```
+Zapisz tę ścieżkę — przyda się za chwilę.
 
-If you don't have one yet, the installer will create it for you.
+Jeśli nie masz jeszcze folderu — installer go utworzy.
 
-### Step 1 — VPS (Linux)
+---
 
-SSH into your VPS as root:
+### Krok 1 — Instalacja na VPS
+
+Otwórz terminal i połącz się z VPS-em:
 
 ```bash
-ssh root@YOUR_VPS_IP
+ssh root@TWOJE_IP_SERWERA
 ```
 
-Clone and run the installer:
+> **Gdzie znaleźć IP serwera?** W panelu hostingu (np. Hostinger → VPS → IPv4).
+
+Wklej te dwie komendy:
 
 ```bash
 git clone https://github.com/AIBiz-Automatyzacje/claude-cron.git /tmp/claude-cron-install
 sudo bash /tmp/claude-cron-install/scripts/install-vps.sh
 ```
 
-The script handles everything automatically:
+Installer zrobi wszystko automatycznie. Po drodze zapyta Cię o kilka rzeczy:
 
-1. Installs Node.js 22 (if missing)
-2. Creates dedicated `claude` user (Claude CLI blocks root)
-3. Installs Claude CLI globally
-4. **Interactive Claude CLI login** — you'll need to complete this in the browser
-5. Clones repo to `/home/claude/claude-cron`
-6. Asks for configuration (workspace, port, Discord, timezone)
-7. Creates systemd service (auto-restart, runs 24/7)
-8. Configures firewall — port BLOCKED in UFW (Tailscale access only)
-9. Optionally sets up Tailscale Funnel (for webhooks from external services)
+| Pytanie | Co wpisać |
+|---------|-----------|
+| **Log in to Claude CLI** | Wpisz `Y`, przejdź logowanie w przeglądarce, potem `exit` |
+| **Ścieżka do workspace** | Ścieżka do Twojego folderu roboczego, np. `/home/claude/vault` |
+| **Port** | Zostaw domyślny — Enter |
+| **Discord webhook** | URL webhooka z Discorda, albo puste — Enter |
+| **Timezone** | Zostaw domyślny (Europe/Warsaw) — Enter |
+| **Tailscale Funnel** | `Y` jeśli chcesz webhoki, `N` jeśli nie wiesz co to |
 
-**After installation, save your Tailscale IP** — you'll need it in Step 2:
+**Na końcu installer pokaże Tailscale IP** — zapisz je! Potrzebujesz go w kroku 2.
 
+Jeśli nie widzisz IP, wpisz na VPS-ie:
 ```bash
 tailscale ip -4
-# example: 100.122.215.61
 ```
 
-### Step 2 — Mac (local dashboard)
+Przykład: `100.86.100.113`
 
-On your Mac:
+---
+
+### Krok 2 — Instalacja na Macu
+
+Otwórz terminal na swoim Macu i wklej:
 
 ```bash
 git clone https://github.com/AIBiz-Automatyzacje/claude-cron.git ~/claude-cron
@@ -84,35 +92,43 @@ cd ~/claude-cron
 bash setup.sh
 ```
 
-Setup asks 4 things:
+Setup pyta o 4 rzeczy po kolei:
 
-| Step | What | Example |
-|------|------|---------|
-| **1. VPS connection** | Tailscale IP from Step 1 | `100.122.215.61` |
-| **2. Workspace** | Folder where Claude CLI runs (drag & drop from Finder works) | `~/Documents/my-vault` |
-| **3. Autostart** | Start server with Claude Code? | `Y` |
-| **4. Discord** | Webhook URL for notifications | empty = skip |
+| Krok | Co wpisać |
+|------|-----------|
+| **1. Tailscale IP VPS-a** | Wklej IP z kroku 1, np. `100.86.100.113` |
+| **2. Workspace** | Przeciągnij folder z Findera do terminala i naciśnij Enter |
+| **3. Autostart** | `Y` — serwer startuje automatycznie z Claude Code |
+| **4. Discord** | URL webhooka albo puste — Enter |
 
-After setup:
+Po zakończeniu wklej to w terminalu:
 
 ```bash
 source ~/.zshrc
 ```
 
-### Step 3 — Verify
+---
 
-Open http://localhost:7777 — you should see the dashboard with a **LOCAL/VPS toggle** in the header.
+### Krok 3 — Sprawdź czy działa
 
-- **LOCAL** (green) — jobs run on your Mac
-- **VPS** (magenta) — jobs run on VPS 24/7
+Otwórz przeglądarkę i wejdź na:
 
-Switch to VPS and check that jobs/skills load correctly.
+```
+http://localhost:7777
+```
+
+Powinieneś zobaczyć dashboard z przełącznikiem **LOCAL / VPS** na górze:
+
+- **LOCAL** (zielony) — joby lecą na Twoim Macu
+- **VPS** (magenta) — joby lecą na serwerze 24/7
+
+Kliknij **VPS** i sprawdź czy się łączy. Jeśli widzisz dane z serwera — wszystko działa! 🎉
 
 ---
 
-## Local-only Setup
+## Instalacja bez VPS-a
 
-If you don't have a VPS and want to run everything on your Mac:
+Jeśli nie masz serwera i chcesz używać tylko lokalnie:
 
 ```bash
 git clone https://github.com/AIBiz-Automatyzacje/claude-cron.git ~/claude-cron
@@ -120,179 +136,130 @@ cd ~/claude-cron
 bash setup.sh
 ```
 
-Leave the VPS field empty in Step 1 of setup. Everything works the same, but jobs only run while your Mac is awake.
+W kroku 1 (Tailscale IP) zostaw puste i naciśnij Enter. Reszta tak samo.
+
+**Uwaga:** bez VPS-a joby działają tylko kiedy Mac nie śpi. Jak zamkniesz klapę — joby się nie odpalą.
 
 ---
 
-## Dashboard
+## Jak korzystać z dashboardu
 
-Three tabs:
+Dashboard ma 3 zakładki:
 
-- **JOBS** — create, edit, enable/disable, trigger jobs manually
-- **HISTORY** — run log with status, duration, parsed Claude output
-- **SKILLS** — browse all available skills with filters (Project / User / Plugin)
+### JOBS — Twoje zadania
 
-### Creating a Job
+Tu tworzysz i zarządzasz jobami. Kliknij **+ NEW JOB** i ustaw:
 
-Click **+ NEW JOB**:
-- Choose a skill (grouped by source: Project, User, Plugin)
-- Set schedule (daily, weekdays, weekly, interval, or webhook-only)
-- Optionally add a prompt/arguments
-- Enable Discord notification per job
-- Generate webhook URL for external triggers
+- **Nazwa** — jak chcesz nazwać joba
+- **Skill** — wybierz z listy (pogrupowane: Project, User, Plugin)
+- **Harmonogram** — codziennie, dni robocze, co X godzin, itp.
+- **Prompt** — dodatkowe instrukcje dla Claude'a (opcjonalne)
+- **Discord** — zaznacz jeśli chcesz powiadomienie na Discorda
 
----
+Każdy job ma przyciski: ▶ (uruchom teraz), ⏻ (włącz/wyłącz), ✎ (edytuj), ✕ (usuń).
 
-## Webhooks
+### HISTORY — Historia uruchomień
 
-Jobs can be triggered by external services via HTTP POST:
+Kliknij dowolny wpis żeby zobaczyć co Claude zrobił — pełny output z narzędziami, czasem i kosztem.
 
-```
-POST /webhook/<token>
-Content-Type: application/json
+### SKILLS — Dostępne skille
 
-{"any": "payload data"}
-```
-
-The payload is passed to Claude as context. Generate tokens in the dashboard (edit job → WEBHOOK section).
-
-### Webhook Setup on VPS
-
-1. **Enable Tailscale Funnel** (public HTTPS tunnel):
-   ```bash
-   sudo tailscale funnel --bg 7777
-   ```
-   You'll get a URL like `https://srv123.tail456.ts.net`
-
-2. **Set WEBHOOK_BASE_URL** so the dashboard shows correct links:
-   ```bash
-   sudo systemctl edit claude-cron
-   ```
-   Add:
-   ```ini
-   [Service]
-   Environment="WEBHOOK_BASE_URL=https://srv123.tail456.ts.net"
-   ```
-   Then: `sudo systemctl daemon-reload && sudo systemctl restart claude-cron`
-
-3. **Generate tokens** in dashboard — edit job → WEBHOOK → Generate
-
-4. **Test:**
-   ```bash
-   curl -X POST https://your-url.ts.net/webhook/YOUR-TOKEN \
-     -H "Content-Type: application/json" \
-     -d '{"test": true}'
-   ```
+Przeglądaj wszystkie skille z filtrami:
+- **📁 Project** — skille z Twojego workspace'u
+- **👤 User** — Twoje globalne skille
+- **🔌 Plugin** — skille z zainstalowanych pluginów
 
 ---
 
-## Environment Variables
+## Webhoki — triggerowanie z zewnątrz
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `CLAUDE_CRON_WORKSPACE` | Working directory for Claude CLI | Current directory |
-| `CLAUDE_CRON_PORT` | Server port | `7777` |
-| `CLAUDE_CRON_VPS_URL` | VPS URL for local proxy (Mac only) | — |
-| `DISCORD_WEBHOOK_URL` | Discord webhook for notifications | — |
-| `WEBHOOK_BASE_URL` | Public URL for webhook links (VPS only) | — |
-| `WEBHOOK_ENABLED` | Set to `0` to disable webhooks | `1` |
+Chcesz żeby Make, n8n albo inny serwis odpalał joba? Potrzebujesz webhooka.
 
----
+### Jak to ustawić
 
-## Useful Commands
+1. W dashboardzie edytuj joba (✎)
+2. Na dole znajdź sekcję **WEBHOOK**
+3. Kliknij **🔗 GENERATE WEBHOOK URL**
+4. Skopiuj URL (📋) i wklej go w zewnętrznym serwisie
 
-### VPS
+Zewnętrzny serwis wysyła POST na ten URL → claude-cron odpala joba → Claude wykonuje zadanie.
+
+### Ważne
+
+Webhoki działają tylko jeśli podczas instalacji VPS-a włączyłeś **Tailscale Funnel** (`Y` na pytanie o Funnel). Jeśli wtedy wybrałeś `N`, możesz włączyć go później na VPS-ie:
 
 ```bash
-systemctl status claude-cron                    # check status
-journalctl -u claude-cron -f                    # live logs
-systemctl restart claude-cron                   # restart
-su - claude -c 'cd ~/claude-cron && git pull'   # update code (then restart)
-tailscale ip -4                                 # show Tailscale IP
-sudo tailscale funnel --bg 7777                 # enable webhook tunnel
-```
-
-### Mac
-
-```bash
-cd ~/claude-cron && node server.js              # manual start
-# or just open Claude Code — autostart hook launches server
+sudo tailscale funnel --bg 7777
 ```
 
 ---
 
-## Architecture
+## Przydatne komendy
 
+### Na VPS-ie (przez SSH)
+
+| Co chcesz zrobić | Komenda |
+|------------------|---------|
+| Sprawdzić czy działa | `systemctl status claude-cron` |
+| Zobaczyć logi na żywo | `journalctl -u claude-cron -f` |
+| Zrestartować serwis | `systemctl restart claude-cron` |
+| Zaktualizować kod | `su - claude -c 'cd ~/claude-cron && git pull'` a potem `systemctl restart claude-cron` |
+| Sprawdzić Tailscale IP | `tailscale ip -4` |
+
+### Na Macu
+
+| Co chcesz zrobić | Komenda |
+|------------------|---------|
+| Uruchomić ręcznie | `cd ~/claude-cron && node server.js` |
+| Otworzyć dashboard | `http://localhost:7777` w przeglądarce |
+
+> Jeśli zainstalowałeś autostart — serwer startuje sam przy każdym uruchomieniu Claude Code. Nie musisz nic robić.
+
+---
+
+## Rozwiązywanie problemów
+
+### Dashboard nie wczytuje danych z VPS-a
+
+Sprawdź czy Tailscale działa na obu urządzeniach. Na Macu:
+```bash
+tailscale status
 ```
-[Dashboard UI] ←→ [server.js API] ←→ [executor.js → Claude CLI]
-                                   ←→ [db.js → SQLite]
-     ↕ (toggle)
-[Proxy /api/vps/*] ←→ [VPS instance via Tailscale]
-```
+Powinieneś widzieć swój VPS na liście.
 
-- **Jobs** have a cron expression, a skill/prompt, and optional webhook token
-- **Runs** are queued and executed one at a time (sequential queue)
-- **Output** is parsed from Claude CLI's `--output-format stream-json`
-- **Skills** are scanned from 3 sources: project, user (global), and plugin
+### Joby się nie odpalają na VPS-ie
 
-## Security
-
-- **Port 7777 blocked in UFW** — access only via Tailscale (private network)
-- **Dashboard** reachable only from Tailscale-connected machines
-- **Webhooks** (`/webhook/*`) are the only endpoints exposed via Funnel (HTTPS)
-- **Claude CLI** runs as dedicated `claude` user (not root)
-- Webhook tokens are UUID v4 (122 bits of entropy)
-
-## Project Structure
-
-```
-claude-cron/
-├── server.js          # HTTP server, API, routing
-├── setup.sh           # Interactive macOS setup
-├── lib/
-│   ├── config.js      # Environment & defaults
-│   ├── db.js          # SQLite database + migrations
-│   ├── executor.js    # Claude CLI spawn, timeouts, watchdog
-│   ├── scheduler.js   # Cron scheduling, queue, wake detection
-│   ├── skills.js      # Skill scanner (project + user + plugin)
-│   ├── discord.js     # Discord webhook notifications
-│   └── platform.js    # Autostart (launchd/schtasks)
-├── public/
-│   ├── index.html     # Dashboard UI
-│   ├── app.js         # Frontend logic
-│   └── style.css      # Retro arcade styling
-├── scripts/
-│   ├── install-vps.sh
-│   └── install-windows.ps1
-└── data/
-    └── claude-cron.db # SQLite (created on first run)
-```
-
-## Troubleshooting
-
-**Service won't start:**
+Sprawdź logi:
 ```bash
 journalctl -u claude-cron -n 30
 ```
 
-**Claude CLI not logged in:**
+Najczęstsza przyczyna: Claude CLI nie jest zalogowany. Napraw tak:
 ```bash
 su - claude
-claude    # complete interactive login
+claude
+# przejdź logowanie w przeglądarce
 exit
 sudo systemctl restart claude-cron
 ```
 
-**Wrong timezone (jobs fire at wrong time):**
+### Joby odpalają się o złej godzinie
+
+Serwer może mieć inną strefę czasową. Sprawdź i popraw:
 ```bash
+timedatectl
 timedatectl set-timezone Europe/Warsaw
 sudo systemctl restart claude-cron
 ```
 
-**Port accessible from public internet:**
+### Serwer na Macu nie startuje (port zajęty)
+
+Znaczy że coś już działa na porcie 7777. Sprawdź co:
 ```bash
-sudo ufw deny 7777/tcp
+lsof -i :7777
 ```
 
-**npm permission errors:**
-Install global packages as root (`npm install -g ...`). The `claude` user has read-only access.
+Możesz uruchomić na innym porcie:
+```bash
+CLAUDE_CRON_PORT=7778 node server.js
+```
