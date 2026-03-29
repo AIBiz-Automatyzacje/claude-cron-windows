@@ -215,9 +215,10 @@ fi
 # Timezone
 echo ""
 CURRENT_TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo "UTC")
-ask "Timezone [$CURRENT_TZ]: "
+DEFAULT_TZ="Europe/Warsaw"
+ask "Timezone [$DEFAULT_TZ]: "
 read -r TZ_INPUT
-TZ_INPUT="${TZ_INPUT:-$CURRENT_TZ}"
+TZ_INPUT="${TZ_INPUT:-$DEFAULT_TZ}"
 if [ "$TZ_INPUT" != "$CURRENT_TZ" ]; then
   timedatectl set-timezone "$TZ_INPUT"
   ok "Timezone: $TZ_INPUT"
