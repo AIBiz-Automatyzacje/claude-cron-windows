@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ============================================
 #  CLAUDE-CRON — macOS Setup
-#  Interactive installer for local Mac
+#  Dashboard + proxy do VPS
 # ============================================
 
 # Colors
@@ -11,6 +11,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+DIM='\033[2m'
 BOLD='\033[1m'
 NC='\033[0m'
 
@@ -27,40 +28,104 @@ echo ""
 echo -e "${CYAN}🕹️  CLAUDE-CRON — macOS Setup${NC}"
 echo "========================================"
 echo ""
+echo -e "  Ten skrypt konfiguruje lokalny dashboard claude-cron"
+echo -e "  i podłącza go do Twojego VPS-a (który działa 24/7)."
+echo ""
+echo -e "  ${DIM}Jeśli nie masz jeszcze VPS-a — najpierw uruchom install-vps.sh${NC}"
+echo -e "  ${DIM}Można też użyć bez VPS-a (tylko lokalnie), ale wtedy${NC}"
+echo -e "  ${DIM}joby działają tylko gdy Mac nie śpi.${NC}"
+echo ""
 
 # ============ PREFLIGHT ============
 
-info "Checking requirements..."
+info "Sprawdzam wymagania..."
 
 # macOS check
-[ "$(uname)" = "Darwin" ] || fail "This script is for macOS. Use install-vps.sh for Linux."
+[ "$(uname)" = "Darwin" ] || fail "Ten skrypt jest dla macOS. Użyj install-vps.sh na Linuxie."
 
 # Node.js
 if ! command -v node &>/dev/null; then
-  fail "Node.js not found. Install from https://nodejs.org (18+)"
+  fail "Node.js nie znaleziony. Zainstaluj z https://nodejs.org (18+)"
 fi
 NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
-[ "$NODE_VER" -ge 18 ] || fail "Node.js 18+ required (found $(node -v))"
+[ "$NODE_VER" -ge 18 ] || fail "Wymagany Node.js 18+ (znaleziono $(node -v))"
 ok "Node.js $(node -v)"
 
 # npm
-command -v npm &>/dev/null || fail "npm not found"
+command -v npm &>/dev/null || fail "npm nie znaleziony"
 ok "npm $(npm -v)"
 
 # Claude CLI
 if command -v claude &>/dev/null; then
-  ok "Claude CLI found"
+  ok "Claude CLI znaleziony"
 else
-  warn "Claude CLI not found!"
-  warn "Install: npm install -g @anthropic-ai/claude-code"
-  warn "Jobs won't run without it. Setup continues anyway."
+  warn "Claude CLI nie znaleziony!"
+  warn "Zainstaluj: npm install -g @anthropic-ai/claude-code"
+  warn "Joby nie będą działać bez niego. Setup kontynuuje."
   echo ""
 fi
 
-# ============ WORKSPACE ============
+# ============ NPM INSTALL ============
 
 echo ""
-echo -e "  Podaj ścieżkę do folderu, w którym Claude CLI ma pracować."
+info "Instaluję zależności..."
+cd "$REPO_DIR"
+npm install --production 2>&1 | tail -3
+mkdir -p "$REPO_DIR/data"
+ok "Zależności zainstalowane"
+
+# ============ STEP 1: VPS CONNECTION ============
+
+echo ""
+echo "========================================"
+echo -e "${CYAN}  KROK 1/4 — Połączenie z VPS${NC}"
+echo "========================================"
+echo ""
+echo -e "  Claude-cron na VPS działa 24/7 i odpala joby wg harmonogramu."
+echo -e "  Ten dashboard podłącza się do niego przez Tailscale."
+echo ""
+echo -e "  ${DIM}Podaj Tailscale IP Twojego VPS-a (np. 100.x.x.x).${NC}"
+echo -e "  ${DIM}Znajdziesz go na VPS: tailscale ip -4${NC}"
+echo -e "  ${DIM}Puste = pomiń (tryb tylko lokalny)${NC}"
+echo ""
+
+SHELL_RC="$HOME/.zshrc"
+
+ask "Tailscale IP VPS-a: "
+read -r VPS_HOST
+
+if [ -n "$VPS_HOST" ]; then
+  # Strip spaces
+  VPS_HOST="${VPS_HOST%% }"
+  VPS_HOST="${VPS_HOST## }"
+
+  VPS_PORT=7777
+  ask "Port VPS [$VPS_PORT]: "
+  read -r VPS_PORT_INPUT
+  VPS_PORT="${VPS_PORT_INPUT:-$VPS_PORT}"
+
+  VPS_URL="http://${VPS_HOST}:${VPS_PORT}"
+
+  if grep -q "CLAUDE_CRON_VPS_URL" "$SHELL_RC" 2>/dev/null; then
+    info "CLAUDE_CRON_VPS_URL już jest w $SHELL_RC — pomijam"
+  else
+    echo "" >> "$SHELL_RC"
+    echo "# Claude-Cron VPS connection" >> "$SHELL_RC"
+    echo "export CLAUDE_CRON_VPS_URL=\"$VPS_URL\"" >> "$SHELL_RC"
+    ok "VPS: $VPS_URL"
+  fi
+else
+  info "Tryb tylko lokalny — joby działają gdy Mac nie śpi"
+fi
+
+# ============ STEP 2: WORKSPACE ============
+
+echo ""
+echo "========================================"
+echo -e "${CYAN}  KROK 2/4 — Workspace${NC}"
+echo "========================================"
+echo ""
+echo -e "  Folder, w którym Claude CLI wykonuje joby (np. Twój vault Obsidian)."
 echo -e "  ${YELLOW}Tip: przeciągnij folder z Findera tutaj i naciśnij Enter${NC}"
 echo ""
 ask "Ścieżka do workspace [$HOME]: "
@@ -81,37 +146,31 @@ WORKSPACE="$(cd "$WORKSPACE" 2>/dev/null && pwd)" || fail "Folder nie istnieje: 
 
 ok "Workspace: $WORKSPACE"
 
-# ============ NPM INSTALL ============
-
-echo ""
-info "Installing dependencies..."
-cd "$REPO_DIR"
-npm install --production 2>&1 | tail -3
-mkdir -p "$REPO_DIR/data"
-ok "Dependencies installed"
-
-# ============ ENV VARS (.zshrc) ============
-
-echo ""
-SHELL_RC="$HOME/.zshrc"
-
-# CLAUDE_CRON_WORKSPACE
+# Save to .zshrc
 if grep -q "CLAUDE_CRON_WORKSPACE" "$SHELL_RC" 2>/dev/null; then
-  info "CLAUDE_CRON_WORKSPACE already in $SHELL_RC — skipping"
+  info "CLAUDE_CRON_WORKSPACE już jest w $SHELL_RC — pomijam"
 else
   echo "" >> "$SHELL_RC"
   echo "# Claude-Cron workspace" >> "$SHELL_RC"
   echo "export CLAUDE_CRON_WORKSPACE=\"$WORKSPACE\"" >> "$SHELL_RC"
-  ok "Added CLAUDE_CRON_WORKSPACE to $SHELL_RC"
+  ok "Zapisano w $SHELL_RC"
 fi
 
-# ============ AUTOSTART HOOK ============
+# ============ STEP 3: AUTOSTART HOOK ============
 
 echo ""
+echo "========================================"
+echo -e "${CYAN}  KROK 3/4 — Autostart${NC}"
+echo "========================================"
+echo ""
+echo -e "  Serwer claude-cron może startować automatycznie"
+echo -e "  przy każdym uruchomieniu Claude Code."
+echo ""
+
 HOOKS_DIR="$HOME/.claude/hooks"
 HOOK_FILE="$HOOKS_DIR/claude-cron-autostart.js"
 
-ask "Zainstalować autostart hook? (serwer startuje z Claude Code) [Y/n]: "
+ask "Zainstalować autostart? [Y/n]: "
 read -r INSTALL_HOOK
 INSTALL_HOOK="${INSTALL_HOOK:-Y}"
 
@@ -153,91 +212,79 @@ req.on('timeout', () => {
 });
 HOOKEOF
 
-  ok "Hook installed: $HOOK_FILE"
+  ok "Hook: $HOOK_FILE"
 
   # Check if hook is registered in settings.json
   SETTINGS_FILE="$HOME/.claude/settings.json"
   if [ -f "$SETTINGS_FILE" ]; then
     if grep -q "claude-cron-autostart" "$SETTINGS_FILE"; then
-      ok "Hook already registered in settings.json"
+      ok "Hook zarejestrowany w settings.json"
     else
-      warn "Hook file created but NOT registered in Claude Code settings."
-      warn "Add this to $SETTINGS_FILE under hooks.UserPromptSubmit:"
+      warn "Hook utworzony, ale NIE zarejestrowany w Claude Code."
+      warn "Dodaj to do $SETTINGS_FILE w sekcji hooks.UserPromptSubmit:"
       echo ""
-      echo "  {\"type\": \"command\", \"command\": \"node $HOOK_FILE\"}"
+      echo -e "  ${CYAN}{\"type\": \"command\", \"command\": \"node $HOOK_FILE\"}${NC}"
       echo ""
     fi
   else
-    warn "Claude Code settings not found. Register the hook manually."
+    warn "Brak settings.json Claude Code. Zarejestruj hook ręcznie."
   fi
 else
-  info "Skipping autostart hook"
+  info "Pominięto autostart"
 fi
 
-# ============ OPTIONAL: VPS CONNECTION ============
+# ============ STEP 4: DISCORD ============
 
 echo ""
-echo -e "  ${YELLOW}Opcjonalne:${NC} Jeśli masz osobną instancję claude-cron na VPS,"
-echo -e "  możesz podłączyć ją do tego dashboardu (toggle LOCAL/VPS)."
-echo -e "  Jeśli nie wiesz o co chodzi — wybierz N."
+echo "========================================"
+echo -e "${CYAN}  KROK 4/4 — Powiadomienia Discord${NC}"
+echo "========================================"
 echo ""
-ask "Podłączyć zdalny VPS do dashboardu? [y/N]: "
-read -r HAS_VPS
-HAS_VPS="${HAS_VPS:-N}"
-
-if [[ "$HAS_VPS" =~ ^[Yy]$ ]]; then
-  ask "Tailscale IP lub adres VPS (np. 100.x.x.x): "
-  read -r VPS_HOST
-  VPS_PORT=7777
-  ask "VPS port [$VPS_PORT]: "
-  read -r VPS_PORT_INPUT
-  VPS_PORT="${VPS_PORT_INPUT:-$VPS_PORT}"
-
-  VPS_URL="http://${VPS_HOST}:${VPS_PORT}"
-
-  if grep -q "CLAUDE_CRON_VPS_URL" "$SHELL_RC" 2>/dev/null; then
-    info "CLAUDE_CRON_VPS_URL already in $SHELL_RC — skipping"
-  else
-    echo "" >> "$SHELL_RC"
-    echo "# Claude-Cron VPS connection" >> "$SHELL_RC"
-    echo "export CLAUDE_CRON_VPS_URL=\"$VPS_URL\"" >> "$SHELL_RC"
-    ok "Added CLAUDE_CRON_VPS_URL=$VPS_URL to $SHELL_RC"
-  fi
-fi
-
-# ============ OPTIONAL: DISCORD ============
-
+echo -e "  ${DIM}Opcjonalne — po zakończeniu joba dostaniesz wynik na Discorda.${NC}"
+echo -e "  ${DIM}Puste = pomiń${NC}"
 echo ""
-ask "Discord webhook URL do powiadomień? (puste = pomiń): "
+ask "Discord webhook URL: "
 read -r DISCORD_URL
 
 if [ -n "$DISCORD_URL" ]; then
   if grep -q "DISCORD_WEBHOOK_URL" "$SHELL_RC" 2>/dev/null; then
-    info "DISCORD_WEBHOOK_URL already in $SHELL_RC — skipping"
+    info "DISCORD_WEBHOOK_URL już jest w $SHELL_RC — pomijam"
   else
     echo "" >> "$SHELL_RC"
     echo "# Claude-Cron Discord notifications" >> "$SHELL_RC"
     echo "export DISCORD_WEBHOOK_URL=\"$DISCORD_URL\"" >> "$SHELL_RC"
-    ok "Added DISCORD_WEBHOOK_URL to $SHELL_RC"
+    ok "Discord webhook zapisany"
   fi
+else
+  info "Pominięto Discord"
 fi
 
 # ============ DONE ============
 
 echo ""
 echo "========================================"
-echo -e "${GREEN}🕹️  CLAUDE-CRON setup complete!${NC}"
+echo -e "${GREEN}🕹️  Gotowe!${NC}"
+echo "========================================"
 echo ""
 echo -e "  Repo:       ${CYAN}$REPO_DIR${NC}"
 echo -e "  Workspace:  ${CYAN}$WORKSPACE${NC}"
 echo -e "  Dashboard:  ${CYAN}http://localhost:7777${NC}"
+if [ -n "${VPS_URL:-}" ]; then
+echo -e "  VPS:        ${CYAN}$VPS_URL${NC}"
+fi
 echo ""
-echo "  Start manually:"
-echo "    cd $REPO_DIR && node server.js"
+echo -e "  ${BOLD}Następne kroki:${NC}"
+echo ""
+echo "  1. Załaduj zmienne środowiskowe:"
+echo -e "     ${CYAN}source ~/.zshrc${NC}"
+echo ""
+echo "  2. Uruchom serwer:"
+echo -e "     ${CYAN}cd $REPO_DIR && node server.js${NC}"
+echo ""
+echo "  3. Otwórz dashboard:"
+echo -e "     ${CYAN}http://localhost:7777${NC}"
 echo ""
 if [[ "${INSTALL_HOOK:-N}" =~ ^[Yy]$ ]]; then
-  echo "  Or just open Claude Code — server starts automatically."
-  echo ""
-fi
-echo "  Run 'source ~/.zshrc' to load env vars in current terminal."
+echo -e "  ${DIM}Przy kolejnych sesjach Claude Code serwer startuje automatycznie.${NC}"
 echo ""
+fi
