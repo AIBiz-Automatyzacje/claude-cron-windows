@@ -93,10 +93,16 @@
         <h2>AVAILABLE SKILLS</h2>
         <button class="btn btn-small" onclick="loadSkills()">REFRESH</button>
       </div>
+      <div class="skills-filters" id="skills-filters">
+        <button class="skill-filter active" data-filter="all" onclick="filterSkills('all')">ALL <span class="filter-count" id="count-all">0</span></button>
+        <button class="skill-filter" data-filter="project" onclick="filterSkills('project')">📁 PROJECT <span class="filter-count" id="count-project">0</span></button>
+        <button class="skill-filter" data-filter="user" onclick="filterSkills('user')">👤 USER <span class="filter-count" id="count-user">0</span></button>
+        <button class="skill-filter" data-filter="plugin" onclick="filterSkills('plugin')">🔌 PLUGIN <span class="filter-count" id="count-plugin">0</span></button>
+      </div>
       <div class="skills-grid" id="skills-grid"></div>
       <div class="empty-state" id="skills-empty" style="display:none">
         <div class="icon">🔧</div>
-        <div>No skills found in .claude/skills/</div>
+        <div>No skills found</div>
       </div>
     </div>
 

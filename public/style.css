@@ -392,6 +392,69 @@ tr:hover {
   line-height: 1.5;
 }
 
+.skill-card .source-badge {
+  display: inline-block;
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.skill-card .source-badge.source-project {
+  color: var(--green);
+  border: 1px solid var(--green-dim);
+}
+
+.skill-card .source-badge.source-user {
+  color: var(--yellow);
+  border: 1px solid #cccc00;
+}
+
+.skill-card .source-badge.source-plugin {
+  color: var(--magenta);
+  border: 1px solid var(--magenta-dim);
+}
+
+/* === Skills Filters === */
+.skills-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.skill-filter {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  border-radius: 2px;
+}
+
+.skill-filter:hover {
+  border-color: var(--cyan-dim);
+  color: var(--text);
+}
+
+.skill-filter.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  text-shadow: 0 0 6px var(--cyan-glow);
+}
+
+.filter-count {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
 /* === Modal === */
 .modal-overlay {
   display: none;

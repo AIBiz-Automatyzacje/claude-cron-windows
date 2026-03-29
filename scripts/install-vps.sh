@@ -3,113 +3,231 @@ set -euo pipefail
 
 # ============================================
 #  CLAUDE-CRON — VPS Installer
-#  One-command setup for Linux VPS
+#  Interactive setup for Linux VPS (Debian/Ubuntu)
+#  Run as root: sudo bash install-vps.sh
 # ============================================
 
 REPO="https://github.com/AIBiz-Automatyzacje/claude-cron.git"
-INSTALL_DIR="$HOME/claude-cron"
 SERVICE_NAME="claude-cron"
-DEFAULT_PORT=7777
+CLAUDE_USER="claude"
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m'
 
 info()  { echo -e "${CYAN}[info]${NC} $1"; }
-ok()    { echo -e "${GREEN}[ok]${NC} $1"; }
+ok()    { echo -e "${GREEN}  ✓${NC} $1"; }
 warn()  { echo -e "${YELLOW}[warn]${NC} $1"; }
 fail()  { echo -e "${RED}[error]${NC} $1"; exit 1; }
+ask()   { echo -en "${BOLD}$1${NC}"; }
 
 echo ""
-echo -e "${CYAN}🕹️  CLAUDE-CRON — VPS Installer${NC}"
+echo -e "${CYAN}🕹️  CLAUDE-CRON — VPS Setup${NC}"
 echo "========================================"
 echo ""
 
-# --- 1. Check Node.js ---
-if ! command -v node &>/dev/null; then
-  fail "Node.js nie znaleziony. Zainstaluj Node.js 18+:\n  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs"
+# ============ ROOT CHECK ============
+
+if [ "$(id -u)" -ne 0 ]; then
+  fail "Run as root: sudo bash install-vps.sh"
 fi
 
-NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
-if [ "$NODE_VER" -lt 18 ]; then
-  fail "Node.js $NODE_VER jest za stary. Wymagany 18+."
-fi
-ok "Node.js $(node -v)"
+# ============ 1. NODE.JS ============
 
-# --- 2. Check git ---
+info "Checking Node.js..."
+
+if command -v node &>/dev/null; then
+  NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
+  if [ "$NODE_VER" -lt 18 ]; then
+    warn "Node.js $(node -v) is too old (18+ required)"
+    ask "Install Node.js 22? [Y/n]: "
+    read -r INSTALL_NODE
+    INSTALL_NODE="${INSTALL_NODE:-Y}"
+    if [[ "$INSTALL_NODE" =~ ^[Yy]$ ]]; then
+      curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+      apt-get install -y nodejs
+    else
+      fail "Node.js 18+ required"
+    fi
+  fi
+  ok "Node.js $(node -v)"
+else
+  info "Node.js not found — installing Node.js 22..."
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y nodejs
+  ok "Node.js $(node -v)"
+fi
+
+# ============ 2. GIT ============
+
 if ! command -v git &>/dev/null; then
-  info "Instaluję git..."
-  sudo apt-get update -qq && sudo apt-get install -y -qq git
+  info "Installing git..."
+  apt-get update -qq && apt-get install -y -qq git
 fi
 ok "git $(git --version | awk '{print $3}')"
 
-# --- 3. Clone or update repo ---
+# ============ 3. BUILD TOOLS (for better-sqlite3) ============
+
+if ! dpkg -l | grep -q build-essential 2>/dev/null; then
+  info "Installing build tools (needed for SQLite)..."
+  apt-get update -qq && apt-get install -y -qq build-essential python3
+fi
+ok "Build tools"
+
+# ============ 4. DEDICATED USER ============
+
+if id -u "$CLAUDE_USER" &>/dev/null; then
+  ok "User '$CLAUDE_USER' exists"
+else
+  info "Creating dedicated user '$CLAUDE_USER'..."
+  useradd -m -s /bin/bash "$CLAUDE_USER"
+  ok "User '$CLAUDE_USER' created"
+fi
+
+CLAUDE_HOME=$(eval echo "~$CLAUDE_USER")
+INSTALL_DIR="$CLAUDE_HOME/claude-cron"
+
+# ============ 5. CLAUDE CLI ============
+
+info "Installing Claude CLI globally..."
+npm install -g @anthropic-ai/claude-code 2>&1 | tail -1
+ok "Claude CLI installed"
+
+echo ""
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}  Claude CLI needs to be logged in as '$CLAUDE_USER'.${NC}"
+echo -e "${YELLOW}  This is interactive — you'll need to complete the${NC}"
+echo -e "${YELLOW}  login flow in your browser.${NC}"
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+ask "Log in to Claude CLI now? [Y/n]: "
+read -r DO_LOGIN
+DO_LOGIN="${DO_LOGIN:-Y}"
+
+if [[ "$DO_LOGIN" =~ ^[Yy]$ ]]; then
+  echo ""
+  echo "Switching to '$CLAUDE_USER' — run 'claude' and complete login."
+  echo "When done, type 'exit' to return to this script."
+  echo ""
+  su - "$CLAUDE_USER" -c "claude --version 2>/dev/null && echo 'Claude CLI ready — type exit' || echo 'Run: claude'" || true
+  su -l "$CLAUDE_USER" || true
+  echo ""
+  ok "Claude CLI login step completed"
+else
+  warn "Skipping login — jobs won't run until Claude CLI is logged in"
+  warn "Login later: su - $CLAUDE_USER -c 'claude'"
+fi
+
+# ============ 6. CLONE REPO ============
+
+echo ""
+info "Setting up repository..."
+
 if [ -d "$INSTALL_DIR/.git" ]; then
-  info "Aktualizuję istniejącą instalację..."
-  cd "$INSTALL_DIR"
-  git pull --ff-only
+  info "Updating existing installation..."
+  su - "$CLAUDE_USER" -c "cd $INSTALL_DIR && git pull --ff-only"
 else
   if [ -d "$INSTALL_DIR" ]; then
-    warn "$INSTALL_DIR istnieje ale bez git. Tworzę backup..."
+    warn "$INSTALL_DIR exists without git — creating backup..."
     mv "$INSTALL_DIR" "${INSTALL_DIR}.backup.$(date +%s)"
   fi
-  info "Klonuję repo..."
-  git clone "$REPO" "$INSTALL_DIR"
-  cd "$INSTALL_DIR"
+  info "Cloning repository..."
+  su - "$CLAUDE_USER" -c "git clone $REPO $INSTALL_DIR"
 fi
-ok "Repo w $INSTALL_DIR"
+ok "Repo: $INSTALL_DIR"
 
-# --- 4. npm install ---
-info "Instaluję zależności..."
-cd "$INSTALL_DIR"
-npm install --production 2>&1 | tail -1
-ok "Zależności zainstalowane"
+# ============ 7. NPM INSTALL ============
 
-# --- 5. Create data dir ---
+info "Installing dependencies..."
+su - "$CLAUDE_USER" -c "cd $INSTALL_DIR && npm install --production" 2>&1 | tail -3
 mkdir -p "$INSTALL_DIR/data"
+chown "$CLAUDE_USER:$CLAUDE_USER" "$INSTALL_DIR/data"
+ok "Dependencies installed"
 
-# --- 6. Workspace dir ---
-WORKSPACE="${CLAUDE_CRON_WORKSPACE:-$HOME/vault}"
+# ============ 8. CONFIGURATION ============
+
+echo ""
+echo -e "${CYAN}Configuration${NC}"
+echo "─────────────────────────────────────"
+echo ""
+
+# Workspace
+ask "Workspace directory (where Claude CLI runs) [$CLAUDE_HOME/workspace]: "
+read -r WORKSPACE_INPUT
+WORKSPACE="${WORKSPACE_INPUT:-$CLAUDE_HOME/workspace}"
+WORKSPACE="${WORKSPACE/#\~/$CLAUDE_HOME}"
+
 if [ ! -d "$WORKSPACE" ]; then
-  warn "Katalog workspace $WORKSPACE nie istnieje — tworzę..."
+  info "Creating workspace: $WORKSPACE"
   mkdir -p "$WORKSPACE"
+  chown "$CLAUDE_USER:$CLAUDE_USER" "$WORKSPACE"
 fi
-info "Workspace: $WORKSPACE"
+ok "Workspace: $WORKSPACE"
 
-# --- 7. Check Claude CLI ---
-if command -v claude &>/dev/null; then
-  ok "Claude CLI znaleziony: $(which claude)"
+# Port
+ask "Server port [7777]: "
+read -r PORT_INPUT
+PORT="${PORT_INPUT:-7777}"
+ok "Port: $PORT"
+
+# Discord webhook (optional)
+echo ""
+ask "Discord webhook URL for notifications (leave empty to skip): "
+read -r DISCORD_URL
+DISCORD_URL="${DISCORD_URL:-}"
+if [ -n "$DISCORD_URL" ]; then
+  ok "Discord: configured"
+fi
+
+# Timezone
+echo ""
+CURRENT_TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo "UTC")
+ask "Timezone [$CURRENT_TZ]: "
+read -r TZ_INPUT
+TZ_INPUT="${TZ_INPUT:-$CURRENT_TZ}"
+if [ "$TZ_INPUT" != "$CURRENT_TZ" ]; then
+  timedatectl set-timezone "$TZ_INPUT"
+  ok "Timezone: $TZ_INPUT"
 else
-  warn "Claude CLI nie znaleziony!"
-  warn "Zainstaluj: npm install -g @anthropic-ai/claude-code"
-  warn "Jobs nie będą się wykonywać bez Claude CLI."
+  ok "Timezone: $CURRENT_TZ (unchanged)"
 fi
 
-# --- 8. Systemd service ---
-info "Tworzę systemd service..."
+# ============ 9. SYSTEMD SERVICE ============
+
+echo ""
+info "Creating systemd service..."
 
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 NODE_PATH=$(which node)
 
-sudo tee "$SERVICE_FILE" > /dev/null <<EOF
+# Build Environment lines
+ENV_LINES="Environment=CLAUDE_CRON_PORT=$PORT
+Environment=CLAUDE_CRON_WORKSPACE=$WORKSPACE
+Environment=PATH=$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
+
+if [ -n "$DISCORD_URL" ]; then
+  ENV_LINES="$ENV_LINES
+Environment=DISCORD_WEBHOOK_URL=$DISCORD_URL"
+fi
+
+cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Claude-Cron Skill Scheduler
 After=network.target
 
 [Service]
 Type=simple
-User=$USER
+User=$CLAUDE_USER
 WorkingDirectory=$INSTALL_DIR
 ExecStart=$NODE_PATH $INSTALL_DIR/server.js
 Restart=on-failure
 RestartSec=10
 
-Environment=CLAUDE_CRON_PORT=$DEFAULT_PORT
-Environment=CLAUDE_CRON_WORKSPACE=$WORKSPACE
-Environment=PATH=$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+$ENV_LINES
 
 StandardOutput=journal
 StandardError=journal
@@ -119,41 +237,141 @@ SyslogIdentifier=$SERVICE_NAME
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl daemon-reload
-sudo systemctl enable "$SERVICE_NAME"
-sudo systemctl restart "$SERVICE_NAME"
+systemctl daemon-reload
+systemctl enable "$SERVICE_NAME"
+systemctl restart "$SERVICE_NAME"
 
-# Wait a moment for startup
 sleep 2
 
-if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-  ok "Service ${SERVICE_NAME} uruchomiony"
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+  ok "Service running"
 else
-  warn "Service nie wystartował. Sprawdź: sudo journalctl -u ${SERVICE_NAME} -n 20"
+  warn "Service failed to start. Check: journalctl -u $SERVICE_NAME -n 30"
 fi
 
-# --- 9. Firewall ---
+# ============ 10. FIREWALL ============
+
+echo ""
+info "Configuring firewall..."
+
 if command -v ufw &>/dev/null; then
-  if sudo ufw status | grep -q "active"; then
-    info "Otwieram port $DEFAULT_PORT w UFW..."
-    sudo ufw allow "$DEFAULT_PORT"/tcp
-    ok "Port $DEFAULT_PORT otwarty"
+  if ufw status | grep -q "active"; then
+    # DENY port — access only via Tailscale
+    if ufw status | grep -q "$PORT.*ALLOW"; then
+      warn "Port $PORT is OPEN in UFW — closing it (Tailscale only)"
+      ufw delete allow "$PORT/tcp" 2>/dev/null || true
+      ufw delete allow "$PORT" 2>/dev/null || true
+    fi
+    ufw deny "$PORT/tcp" 2>/dev/null || true
+    ok "Port $PORT blocked in UFW (access via Tailscale only)"
+  else
+    info "UFW inactive — make sure port $PORT is not publicly accessible"
+  fi
+else
+  warn "UFW not found — make sure port $PORT is not publicly accessible"
+  warn "The dashboard should only be accessible via Tailscale or private network"
+fi
+
+# ============ 11. TAILSCALE ============
+
+echo ""
+echo -e "${CYAN}Tailscale & Webhooks${NC}"
+echo "─────────────────────────────────────"
+echo ""
+
+if command -v tailscale &>/dev/null; then
+  ok "Tailscale installed"
+  TS_IP=$(tailscale ip -4 2>/dev/null || echo "")
+  if [ -n "$TS_IP" ]; then
+    ok "Tailscale IP: $TS_IP"
+  else
+    warn "Tailscale not connected. Run: tailscale up"
+  fi
+else
+  warn "Tailscale not installed."
+  echo "  Tailscale provides secure private networking between your Mac and VPS."
+  echo "  Install: https://tailscale.com/download/linux"
+  echo ""
+  TS_IP=""
+fi
+
+# Tailscale Funnel for webhooks
+echo ""
+ask "Set up Tailscale Funnel for webhooks? (exposes /webhook/* to internet) [y/N]: "
+read -r SETUP_FUNNEL
+SETUP_FUNNEL="${SETUP_FUNNEL:-N}"
+
+WEBHOOK_BASE_URL=""
+if [[ "$SETUP_FUNNEL" =~ ^[Yy]$ ]]; then
+  if command -v tailscale &>/dev/null; then
+    info "Starting Tailscale Funnel on port $PORT..."
+    tailscale funnel --bg "$PORT" 2>/dev/null || warn "Funnel failed — you may need to enable it in Tailscale admin"
+
+    # Try to get funnel URL
+    FUNNEL_STATUS=$(tailscale funnel status 2>/dev/null || echo "")
+    if echo "$FUNNEL_STATUS" | grep -q "https://"; then
+      WEBHOOK_BASE_URL=$(echo "$FUNNEL_STATUS" | grep -oP 'https://[^ ]+' | head -1 | sed 's/\/$//')
+      ok "Funnel active: $WEBHOOK_BASE_URL"
+    else
+      ask "Enter your Tailscale Funnel URL (e.g., https://srv123.tail456.ts.net): "
+      read -r WEBHOOK_BASE_URL
+    fi
+
+    # Add WEBHOOK_BASE_URL to systemd
+    if [ -n "$WEBHOOK_BASE_URL" ]; then
+      # Update service file with webhook URL
+      sed -i "/SyslogIdentifier/i Environment=WEBHOOK_BASE_URL=$WEBHOOK_BASE_URL" "$SERVICE_FILE"
+      systemctl daemon-reload
+      systemctl restart "$SERVICE_NAME"
+      sleep 1
+      ok "WEBHOOK_BASE_URL set in systemd service"
+    fi
+  else
+    warn "Tailscale not installed — skipping Funnel"
   fi
 fi
 
-# --- Done ---
+# ============ SUMMARY ============
+
 echo ""
 echo "========================================"
-echo -e "${GREEN}🕹️  CLAUDE-CRON zainstalowany!${NC}"
+echo -e "${GREEN}🕹️  CLAUDE-CRON — VPS Setup Complete!${NC}"
+echo "========================================"
 echo ""
-echo -e "  Dashboard:  ${CYAN}http://$(hostname -I | awk '{print $1}'):${DEFAULT_PORT}${NC}"
-echo -e "  Workspace:  $WORKSPACE"
+echo -e "  ${BOLD}Service:${NC}    $SERVICE_NAME (systemd)"
+echo -e "  ${BOLD}User:${NC}       $CLAUDE_USER"
+echo -e "  ${BOLD}Repo:${NC}       $INSTALL_DIR"
+echo -e "  ${BOLD}Workspace:${NC}  $WORKSPACE"
+echo -e "  ${BOLD}Port:${NC}       $PORT"
+
+if [ -n "$TS_IP" ]; then
+  echo -e "  ${BOLD}Dashboard:${NC}  ${CYAN}http://$TS_IP:$PORT${NC} (via Tailscale)"
+fi
+if [ -n "$WEBHOOK_BASE_URL" ]; then
+  echo -e "  ${BOLD}Webhooks:${NC}   ${CYAN}$WEBHOOK_BASE_URL/webhook/<token>${NC}"
+fi
+if [ -n "$DISCORD_URL" ]; then
+  echo -e "  ${BOLD}Discord:${NC}    enabled"
+fi
+
 echo ""
-echo "  Komendy:"
-echo "    sudo systemctl status $SERVICE_NAME    # sprawdź status"
-echo "    sudo journalctl -u $SERVICE_NAME -f    # logi na żywo"
-echo "    sudo systemctl restart $SERVICE_NAME   # restart"
+echo -e "  ${BOLD}Useful commands:${NC}"
+echo "    systemctl status $SERVICE_NAME        # check status"
+echo "    journalctl -u $SERVICE_NAME -f        # live logs"
+echo "    systemctl restart $SERVICE_NAME       # restart"
+echo "    su - $CLAUDE_USER -c 'cd ~/claude-cron && git pull'  # update code"
 echo ""
-echo "  Aby połączyć z lokalnym dashboardem:"
-echo "    export CLAUDE_CRON_VPS_URL=http://TWOJ_VPS_IP:$DEFAULT_PORT"
+
+if [ -n "$TS_IP" ]; then
+  echo -e "  ${BOLD}Connect from your Mac:${NC}"
+  echo "    Add to ~/.zshrc:"
+  echo "      export CLAUDE_CRON_VPS_URL=http://$TS_IP:$PORT"
+  echo ""
+fi
+
+echo -e "  ${BOLD}Security:${NC}"
+echo "    - Port $PORT is BLOCKED in firewall (Tailscale access only)"
+echo "    - Dashboard is not accessible from the public internet"
+echo "    - Only /webhook/* endpoints are exposed via Tailscale Funnel"
+echo "    - Claude CLI runs as dedicated '$CLAUDE_USER' user (not root)"
 echo ""

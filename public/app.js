@@ -358,23 +358,48 @@ function renderRuns(runs) {
   }).join('');
 }
 
+let currentSkillFilter = 'all';
+
 function renderSkills() {
   const grid = document.getElementById('skills-grid');
   const empty = document.getElementById('skills-empty');
 
-  if (allSkills.length === 0) {
+  // Update counts
+  const counts = { all: allSkills.length, project: 0, user: 0, plugin: 0 };
+  allSkills.forEach(s => { if (counts[s.source] !== undefined) counts[s.source]++; });
+  document.getElementById('count-all').textContent = counts.all;
+  document.getElementById('count-project').textContent = counts.project;
+  document.getElementById('count-user').textContent = counts.user;
+  document.getElementById('count-plugin').textContent = counts.plugin;
+
+  const filtered = currentSkillFilter === 'all'
+    ? allSkills
+    : allSkills.filter(s => s.source === currentSkillFilter);
+
+  if (filtered.length === 0) {
     grid.innerHTML = '';
     empty.style.display = 'block';
     return;
   }
 
   empty.style.display = 'none';
-  grid.innerHTML = allSkills.map(s => `
+  // Note: all values are escaped via esc() before insertion — safe from XSS
+  const sourceLabels = { project: '📁 PROJECT', user: '👤 USER', plugin: '🔌 PLUGIN' };
+  grid.innerHTML = filtered.map(s => `
     <div class="skill-card">
+      <div class="source-badge source-${esc(s.source)}">${sourceLabels[s.source] || esc(s.source)}${s.plugin ? ' · ' + esc(s.plugin) : ''}</div>
       <div class="name">/${esc(s.dir_name)}</div>
       <div class="desc">${esc(s.description)}</div>
     </div>
   `).join('');
+}
+
+function filterSkills(filter) {
+  currentSkillFilter = filter;
+  document.querySelectorAll('.skill-filter').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filter);
+  });
+  renderSkills();
 }
 
 function toggleRunDetail(id) {
@@ -472,8 +497,18 @@ function openEditModal(id) {
 
 function populateSkillSelect(selected) {
   const sel = document.getElementById('form-skill');
-  sel.innerHTML = '<option value="">-- select skill --</option>' +
-    allSkills.map(s => `<option value="${esc(s.dir_name)}" ${s.dir_name === selected ? 'selected' : ''}>${esc(s.dir_name)}</option>`).join('');
+  const groups = { project: [], user: [], plugin: [] };
+  allSkills.forEach(s => { if (groups[s.source]) groups[s.source].push(s); });
+
+  const groupLabels = { project: '📁 Project', user: '👤 User', plugin: '🔌 Plugin' };
+  let html = '<option value="">-- select skill --</option>';
+  for (const [source, skills] of Object.entries(groups)) {
+    if (skills.length === 0) continue;
+    html += `<optgroup label="${groupLabels[source] || source}">`;
+    html += skills.map(s => `<option value="${esc(s.dir_name)}" ${s.dir_name === selected ? 'selected' : ''}>${esc(s.dir_name)}</option>`).join('');
+    html += '</optgroup>';
+  }
+  sel.innerHTML = html;
 }
 
 function showModal() {
