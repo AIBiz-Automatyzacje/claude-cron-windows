@@ -29,6 +29,17 @@ Scheduler for [Claude Code](https://claude.ai/code) — run skills and prompts o
 >
 > *Only want to run locally?* Skip to [Local-only setup](#local-only-setup).
 
+### Before you start
+
+Claude-cron needs a **workspace** on the VPS — a folder where Claude CLI executes jobs. This is typically your Obsidian vault or project directory.
+
+If you already have a vault on the VPS, check its path:
+```bash
+ls /home/claude/
+```
+
+If you don't have one yet, the installer will create it for you.
+
 ### Step 1 — VPS (Linux)
 
 SSH into your VPS as root:

@@ -156,27 +156,56 @@ echo "────────────────────────�
 echo ""
 
 # Workspace
-ask "Workspace directory (where Claude CLI runs) [$CLAUDE_HOME/workspace]: "
+echo -e "  Workspace = folder, w którym Claude CLI wykonuje joby."
+echo -e "  To powinien być Twój vault Obsidian (lub inny projekt)."
+echo ""
+
+# Show what's available in claude home
+if [ -d "$CLAUDE_HOME" ]; then
+  DIRS_FOUND=$(su - "$CLAUDE_USER" -c "ls -d $CLAUDE_HOME/*/ 2>/dev/null" || true)
+  if [ -n "$DIRS_FOUND" ]; then
+    echo -e "  ${CYAN}Foldery w /home/$CLAUDE_USER/:${NC}"
+    echo "$DIRS_FOUND" | while read -r d; do
+      echo -e "    ${BOLD}$d${NC}"
+    done
+    echo ""
+  fi
+fi
+
+ask "Ścieżka do workspace [$CLAUDE_HOME/workspace]: "
 read -r WORKSPACE_INPUT
 WORKSPACE="${WORKSPACE_INPUT:-$CLAUDE_HOME/workspace}"
+
+# Strip quotes and spaces
+WORKSPACE="${WORKSPACE//\'/}"
+WORKSPACE="${WORKSPACE//\"/}"
+WORKSPACE="${WORKSPACE%% }"
+WORKSPACE="${WORKSPACE## }"
 WORKSPACE="${WORKSPACE/#\~/$CLAUDE_HOME}"
 
 if [ ! -d "$WORKSPACE" ]; then
-  info "Creating workspace: $WORKSPACE"
-  mkdir -p "$WORKSPACE"
-  chown "$CLAUDE_USER:$CLAUDE_USER" "$WORKSPACE"
+  ask "Folder nie istnieje. Utworzyć $WORKSPACE? [Y/n]: "
+  read -r CREATE_WS
+  CREATE_WS="${CREATE_WS:-Y}"
+  if [[ "$CREATE_WS" =~ ^[Yy]$ ]]; then
+    mkdir -p "$WORKSPACE"
+    chown "$CLAUDE_USER:$CLAUDE_USER" "$WORKSPACE"
+    ok "Utworzono: $WORKSPACE"
+  else
+    fail "Workspace nie istnieje: $WORKSPACE"
+  fi
 fi
 ok "Workspace: $WORKSPACE"
 
 # Port
-ask "Server port [7777]: "
+ask "Port serwera [7777]: "
 read -r PORT_INPUT
 PORT="${PORT_INPUT:-7777}"
 ok "Port: $PORT"
 
 # Discord webhook (optional)
 echo ""
-ask "Discord webhook URL for notifications (leave empty to skip): "
+ask "Discord webhook URL do powiadomień (puste = pomiń): "
 read -r DISCORD_URL
 DISCORD_URL="${DISCORD_URL:-}"
 if [ -n "$DISCORD_URL" ]; then
@@ -297,7 +326,7 @@ fi
 
 # Tailscale Funnel for webhooks
 echo ""
-ask "Set up Tailscale Funnel for webhooks? (exposes /webhook/* to internet) [y/N]: "
+ask "Włączyć Tailscale Funnel dla webhooków? (wystawia /webhook/* na internet) [y/N]: "
 read -r SETUP_FUNNEL
 SETUP_FUNNEL="${SETUP_FUNNEL:-N}"
 
