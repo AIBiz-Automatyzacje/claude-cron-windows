@@ -60,15 +60,24 @@ fi
 # ============ WORKSPACE ============
 
 echo ""
-ask "Where is your project/workspace directory? [$HOME]: "
+echo -e "  Podaj ścieżkę do folderu, w którym Claude CLI ma pracować."
+echo -e "  ${YELLOW}Tip: przeciągnij folder z Findera tutaj i naciśnij Enter${NC}"
+echo ""
+ask "Ścieżka do workspace [$HOME]: "
 read -r WORKSPACE_INPUT
 WORKSPACE="${WORKSPACE_INPUT:-$HOME}"
+
+# Strip quotes and trailing spaces (drag & drop from Finder adds them)
+WORKSPACE="${WORKSPACE//\'/}"
+WORKSPACE="${WORKSPACE//\"/}"
+WORKSPACE="${WORKSPACE%% }"
+WORKSPACE="${WORKSPACE## }"
 
 # Expand ~ to $HOME
 WORKSPACE="${WORKSPACE/#\~/$HOME}"
 
 # Resolve to absolute path
-WORKSPACE="$(cd "$WORKSPACE" 2>/dev/null && pwd)" || fail "Directory not found: $WORKSPACE_INPUT"
+WORKSPACE="$(cd "$WORKSPACE" 2>/dev/null && pwd)" || fail "Folder nie istnieje: $WORKSPACE_INPUT"
 
 ok "Workspace: $WORKSPACE"
 
@@ -102,7 +111,7 @@ echo ""
 HOOKS_DIR="$HOME/.claude/hooks"
 HOOK_FILE="$HOOKS_DIR/claude-cron-autostart.js"
 
-ask "Install Claude Code autostart hook? (starts server when you open Claude) [Y/n]: "
+ask "Zainstalować autostart hook? (serwer startuje z Claude Code) [Y/n]: "
 read -r INSTALL_HOOK
 INSTALL_HOOK="${INSTALL_HOOK:-Y}"
 
@@ -168,7 +177,7 @@ fi
 # ============ OPTIONAL: VPS CONNECTION ============
 
 echo ""
-ask "Do you have a VPS with claude-cron? [y/N]: "
+ask "Masz VPS z claude-cron? [y/N]: "
 read -r HAS_VPS
 HAS_VPS="${HAS_VPS:-N}"
 
@@ -195,7 +204,7 @@ fi
 # ============ OPTIONAL: DISCORD ============
 
 echo ""
-ask "Discord webhook URL for notifications? (leave empty to skip): "
+ask "Discord webhook URL do powiadomień? (puste = pomiń): "
 read -r DISCORD_URL
 
 if [ -n "$DISCORD_URL" ]; then
