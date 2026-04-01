@@ -53,7 +53,13 @@ ssh root@TWOJE_IP_SERWERA
 
 > **Gdzie znaleźć IP serwera?** W panelu hostingu (np. Hostinger → VPS → IPv4).
 
-Wklej te dwie komendy:
+Najpierw zainstaluj wymagane narzędzia (na świeżym VPS-ie nie ma ich domyślnie):
+
+```bash
+apt update && apt install -y git curl
+```
+
+Potem wklej te dwie komendy:
 
 ```bash
 git clone https://github.com/AIBiz-Automatyzacje/claude-cron.git /tmp/claude-cron-install
