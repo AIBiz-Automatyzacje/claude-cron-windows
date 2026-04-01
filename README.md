@@ -70,7 +70,7 @@ Installer zrobi wszystko automatycznie. Po drodze zapyta Cię o kilka rzeczy:
 
 | Pytanie | Co wpisać |
 |---------|-----------|
-| **Log in to Claude CLI** | Wpisz `Y`, przejdź logowanie w przeglądarce, potem `exit` |
+| **Log in to Claude CLI** | Wpisz `Y` — przeniesie Cię na użytkownika `claude`. Wpisz `claude`, przejdź logowanie w przeglądarce, potem wpisz `exit` żeby wrócić do installera |
 | **Ścieżka do workspace** | Ścieżka do Twojego folderu roboczego, np. `/home/claude/vault` |
 | **Port** | Zostaw domyślny — Enter |
 | **Discord webhook** | URL webhooka z Discorda, albo puste — Enter |
