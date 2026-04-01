@@ -107,7 +107,8 @@ if [ -n "$VPS_HOST" ]; then
   VPS_URL="http://${VPS_HOST}:${VPS_PORT}"
 
   if grep -q "CLAUDE_CRON_VPS_URL" "$SHELL_RC" 2>/dev/null; then
-    info "CLAUDE_CRON_VPS_URL już jest w $SHELL_RC — pomijam"
+    sed -i '' "s|^export CLAUDE_CRON_VPS_URL=.*|export CLAUDE_CRON_VPS_URL=\"$VPS_URL\"|" "$SHELL_RC"
+    ok "VPS: $VPS_URL (zaktualizowano w $SHELL_RC)"
   else
     echo "" >> "$SHELL_RC"
     echo "# Claude-Cron VPS connection" >> "$SHELL_RC"
@@ -148,7 +149,8 @@ ok "Workspace: $WORKSPACE"
 
 # Save to .zshrc
 if grep -q "CLAUDE_CRON_WORKSPACE" "$SHELL_RC" 2>/dev/null; then
-  info "CLAUDE_CRON_WORKSPACE już jest w $SHELL_RC — pomijam"
+  sed -i '' "s|^export CLAUDE_CRON_WORKSPACE=.*|export CLAUDE_CRON_WORKSPACE=\"$WORKSPACE\"|" "$SHELL_RC"
+  ok "Workspace zaktualizowany w $SHELL_RC"
 else
   echo "" >> "$SHELL_RC"
   echo "# Claude-Cron workspace" >> "$SHELL_RC"
@@ -248,7 +250,8 @@ read -r DISCORD_URL
 
 if [ -n "$DISCORD_URL" ]; then
   if grep -q "DISCORD_WEBHOOK_URL" "$SHELL_RC" 2>/dev/null; then
-    info "DISCORD_WEBHOOK_URL już jest w $SHELL_RC — pomijam"
+    sed -i '' "s|^export DISCORD_WEBHOOK_URL=.*|export DISCORD_WEBHOOK_URL=\"$DISCORD_URL\"|" "$SHELL_RC"
+    ok "Discord zaktualizowany w $SHELL_RC"
   else
     echo "" >> "$SHELL_RC"
     echo "# Claude-Cron Discord notifications" >> "$SHELL_RC"
