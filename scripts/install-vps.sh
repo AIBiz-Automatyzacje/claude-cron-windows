@@ -284,22 +284,28 @@ fi
 echo ""
 info "Configuring firewall..."
 
+if ! command -v ufw &>/dev/null; then
+  info "Installing UFW..."
+  apt-get update -qq && apt-get install -y -qq ufw
+fi
+
 if command -v ufw &>/dev/null; then
-  if ufw status | grep -q "active"; then
-    # DENY port — access only via Tailscale
-    if ufw status | grep -q "$PORT.*ALLOW"; then
-      warn "Port $PORT is OPEN in UFW — closing it (Tailscale only)"
-      ufw delete allow "$PORT/tcp" 2>/dev/null || true
-      ufw delete allow "$PORT" 2>/dev/null || true
-    fi
-    ufw deny "$PORT/tcp" 2>/dev/null || true
-    ok "Port $PORT blocked in UFW (access via Tailscale only)"
-  else
-    info "UFW inactive — make sure port $PORT is not publicly accessible"
+  # Always allow SSH first — never lock yourself out
+  ufw allow 22/tcp 2>/dev/null || true
+
+  if ! ufw status | grep -q "active"; then
+    info "Enabling UFW..."
+    ufw --force enable
   fi
-else
-  warn "UFW not found — make sure port $PORT is not publicly accessible"
-  warn "The dashboard should only be accessible via Tailscale or private network"
+
+  # DENY claude-cron port — access only via Tailscale
+  if ufw status | grep -q "$PORT.*ALLOW"; then
+    warn "Port $PORT is OPEN in UFW — closing it (Tailscale only)"
+    ufw delete allow "$PORT/tcp" 2>/dev/null || true
+    ufw delete allow "$PORT" 2>/dev/null || true
+  fi
+  ufw deny "$PORT/tcp" 2>/dev/null || true
+  ok "Port $PORT blocked in UFW (access via Tailscale only)"
 fi
 
 # ============ 11. TAILSCALE ============
@@ -309,19 +315,36 @@ echo -e "${CYAN}Tailscale & Webhooks${NC}"
 echo "─────────────────────────────────────"
 echo ""
 
+if ! command -v tailscale &>/dev/null; then
+  info "Installing Tailscale..."
+  curl -fsSL https://tailscale.com/install.sh | sh
+fi
+
 if command -v tailscale &>/dev/null; then
   ok "Tailscale installed"
   TS_IP=$(tailscale ip -4 2>/dev/null || echo "")
+  if [ -z "$TS_IP" ]; then
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}  Tailscale needs to be connected.${NC}"
+    echo -e "${YELLOW}  Run the command below and follow the login link.${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    ask "Connect Tailscale now? [Y/n]: "
+    read -r DO_TS
+    DO_TS="${DO_TS:-Y}"
+    if [[ "$DO_TS" =~ ^[Yy]$ ]]; then
+      tailscale up
+    fi
+    TS_IP=$(tailscale ip -4 2>/dev/null || echo "")
+  fi
   if [ -n "$TS_IP" ]; then
     ok "Tailscale IP: $TS_IP"
   else
-    warn "Tailscale not connected. Run: tailscale up"
+    warn "Tailscale not connected — run 'tailscale up' later"
   fi
 else
-  warn "Tailscale not installed."
-  echo "  Tailscale provides secure private networking between your Mac and VPS."
-  echo "  Install: https://tailscale.com/download/linux"
-  echo ""
+  warn "Tailscale installation failed"
   TS_IP=""
 fi
 
