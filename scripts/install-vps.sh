@@ -318,6 +318,16 @@ echo ""
 if ! command -v tailscale &>/dev/null; then
   info "Installing Tailscale..."
   curl -fsSL https://tailscale.com/install.sh | sh
+
+  # Wait for tailscaled daemon to be fully ready
+  info "Waiting for Tailscale daemon..."
+  for i in $(seq 1 10); do
+    if systemctl is-active --quiet tailscaled 2>/dev/null; then
+      break
+    fi
+    sleep 1
+  done
+  sleep 2
 fi
 
 if command -v tailscale &>/dev/null; then
