@@ -90,12 +90,10 @@ Przykład: `100.86.100.113`
 
 ### Krok 2 — Instalacja na Macu
 
-Otwórz terminal na swoim Macu i wklej:
+Otwórz terminal na swoim Macu i wklej całość jako jedną komendę:
 
 ```bash
-git clone https://github.com/AIBiz-Automatyzacje/claude-cron.git ~/claude-cron
-cd ~/claude-cron
-bash setup.sh
+git clone https://github.com/AIBiz-Automatyzacje/claude-cron.git ~/claude-cron && cd ~/claude-cron && bash setup.sh
 ```
 
 Setup pyta o 4 rzeczy po kolei:
@@ -137,9 +135,7 @@ Kliknij **VPS** i sprawdź czy się łączy. Jeśli widzisz dane z serwera — w
 Jeśli nie masz serwera i chcesz używać tylko lokalnie:
 
 ```bash
-git clone https://github.com/AIBiz-Automatyzacje/claude-cron.git ~/claude-cron
-cd ~/claude-cron
-bash setup.sh
+git clone https://github.com/AIBiz-Automatyzacje/claude-cron.git ~/claude-cron && cd ~/claude-cron && bash setup.sh
 ```
 
 W kroku 1 (Tailscale IP) zostaw puste i naciśnij Enter. Reszta tak samo.
