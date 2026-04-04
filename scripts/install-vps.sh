@@ -394,6 +394,45 @@ if [[ "$SETUP_FUNNEL" =~ ^[Yy]$ ]]; then
   fi
 fi
 
+# ============ 12. AUTO-UPDATE CRON ============
+
+echo ""
+echo -e "${CYAN}Auto-update${NC}"
+echo "─────────────────────────────────────"
+echo ""
+echo -e "  Codzienny cron (6:00) — automatycznie pulluje"
+echo -e "  vault-git i claude-cron, potem restartuje service."
+echo ""
+
+ask "Ustawić automatyczną aktualizację? [Y/n]: "
+read -r SETUP_AUTOUPDATE
+SETUP_AUTOUPDATE="${SETUP_AUTOUPDATE:-Y}"
+
+if [[ "$SETUP_AUTOUPDATE" =~ ^[Yy]$ ]]; then
+  # Passwordless sudo for service restart
+  echo "$CLAUDE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart $SERVICE_NAME" > "/etc/sudoers.d/$SERVICE_NAME"
+  chmod 440 "/etc/sudoers.d/$SERVICE_NAME"
+  ok "Passwordless sudo for service restart"
+
+  # Check if vault-git exists
+  VAULT_GIT="$CLAUDE_HOME/vault-git"
+  if [ ! -d "$VAULT_GIT/.git" ]; then
+    ask "Ścieżka do vault-git repo [$VAULT_GIT]: "
+    read -r VAULT_GIT_INPUT
+    VAULT_GIT="${VAULT_GIT_INPUT:-$VAULT_GIT}"
+    VAULT_GIT="${VAULT_GIT/#\~/$CLAUDE_HOME}"
+  fi
+
+  # Build cron command
+  CRON_CMD="0 6 * * * su - $CLAUDE_USER -c \"cd $VAULT_GIT && git pull && cd $INSTALL_DIR && git pull\" && systemctl restart $SERVICE_NAME"
+
+  # Add to root crontab (avoid duplicates)
+  ( crontab -l 2>/dev/null | grep -v "$SERVICE_NAME" ; echo "$CRON_CMD" ) | crontab -
+  ok "Cron: codziennie o 6:00 — auto-update + restart"
+else
+  info "Pominięto — możesz dodać ręcznie później"
+fi
+
 # ============ SUMMARY ============
 
 echo ""
