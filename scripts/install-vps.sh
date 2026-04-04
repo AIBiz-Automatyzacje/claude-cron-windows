@@ -62,14 +62,22 @@ else
   ok "Node.js $(node -v)"
 fi
 
-# ============ 2. GIT & CRON ============
+# ============ 2. GIT ============
 
-if ! command -v git &>/dev/null || ! command -v crontab &>/dev/null; then
-  info "Installing git & cron..."
-  apt-get update -qq && apt-get install -y -qq git cron
-  systemctl enable cron 2>/dev/null && systemctl start cron 2>/dev/null
+if ! command -v git &>/dev/null; then
+  info "Installing git..."
+  apt-get update -qq && apt-get install -y -qq git
 fi
 ok "git $(git --version | awk '{print $3}')"
+
+# ============ 2b. CRON ============
+
+if ! command -v crontab &>/dev/null; then
+  info "Installing cron..."
+  apt-get update -qq && apt-get install -y -qq cron
+fi
+systemctl enable cron 2>/dev/null || true
+systemctl start cron 2>/dev/null || true
 ok "cron"
 
 # ============ 3. BUILD TOOLS (for better-sqlite3) ============
@@ -428,7 +436,12 @@ if [[ "$SETUP_AUTOUPDATE" =~ ^[Yy]$ ]]; then
   CRON_CMD="0 6 * * * su - $CLAUDE_USER -c \"cd $VAULT_GIT && git pull && cd $INSTALL_DIR && git pull\" && systemctl restart $SERVICE_NAME"
 
   # Add to root crontab (avoid duplicates)
-  ( crontab -l 2>/dev/null | grep -v "$SERVICE_NAME" ; echo "$CRON_CMD" ) | crontab -
+  EXISTING_CRON=$(crontab -l 2>/dev/null | grep -v "$SERVICE_NAME" || true)
+  if [ -n "$EXISTING_CRON" ]; then
+    printf '%s\n%s\n' "$EXISTING_CRON" "$CRON_CMD" | crontab -
+  else
+    echo "$CRON_CMD" | crontab -
+  fi
   ok "Cron: codziennie o 6:00 — auto-update + restart"
 else
   info "Pominięto — możesz dodać ręcznie później"
