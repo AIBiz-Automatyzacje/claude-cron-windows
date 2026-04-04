@@ -62,13 +62,15 @@ else
   ok "Node.js $(node -v)"
 fi
 
-# ============ 2. GIT ============
+# ============ 2. GIT & CRON ============
 
-if ! command -v git &>/dev/null; then
-  info "Installing git..."
-  apt-get update -qq && apt-get install -y -qq git
+if ! command -v git &>/dev/null || ! command -v crontab &>/dev/null; then
+  info "Installing git & cron..."
+  apt-get update -qq && apt-get install -y -qq git cron
+  systemctl enable cron 2>/dev/null && systemctl start cron 2>/dev/null
 fi
 ok "git $(git --version | awk '{print $3}')"
+ok "cron"
 
 # ============ 3. BUILD TOOLS (for better-sqlite3) ============
 
@@ -110,11 +112,10 @@ DO_LOGIN="${DO_LOGIN:-Y}"
 
 if [[ "$DO_LOGIN" =~ ^[Yy]$ ]]; then
   echo ""
-  echo "Switching to '$CLAUDE_USER' — run 'claude' and complete login."
-  echo "When done, type 'exit' to return to this script."
+  echo "Launching Claude CLI as '$CLAUDE_USER' — complete login in your browser."
+  echo "After login, exit Claude (Ctrl+C or /exit) to continue installation."
   echo ""
-  su - "$CLAUDE_USER" -c "claude --version 2>/dev/null && echo 'Claude CLI ready — type exit' || echo 'Run: claude'" || true
-  su -l "$CLAUDE_USER" || true
+  su - "$CLAUDE_USER" -c "claude" || true
   echo ""
   ok "Claude CLI login step completed"
 else
