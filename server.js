@@ -8,6 +8,7 @@ const scheduler = require('./lib/scheduler');
 const executor = require('./lib/executor');
 const skills = require('./lib/skills');
 const platform = require('./lib/platform');
+const keepAwake = require('./lib/keep-awake');
 
 // === MIME types ===
 const MIME = {
@@ -361,6 +362,9 @@ db.getDb();
 // Start scheduler
 scheduler.start();
 
+// Prevent Windows sleep while server is running
+keepAwake.start();
+
 server.listen(PORT, () => {
   console.log(`\n🕹️  CLAUDE-CRON running at http://localhost:${PORT}`);
   console.log(`   Press Ctrl+C to stop\n`);
@@ -369,12 +373,14 @@ server.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n[shutdown] Stopping...');
+  keepAwake.stop();
   scheduler.stop();
   db.close();
   server.close(() => process.exit(0));
 });
 
 process.on('SIGTERM', () => {
+  keepAwake.stop();
   scheduler.stop();
   db.close();
   server.close(() => process.exit(0));
