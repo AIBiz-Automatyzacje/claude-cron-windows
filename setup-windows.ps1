@@ -38,11 +38,11 @@ try {
     $nodeVersion = (node -v) -replace '^v', ''
     $nodeMajor = [int]($nodeVersion.Split('.')[0])
     if ($nodeMajor -lt 18) {
-        Write-Fail "Wymagany Node.js 18+ (znaleziono v$nodeVersion)"
+        Write-Fail "Wymagany Node.js 18+, znaleziono v$nodeVersion"
     }
     Write-Ok "Node.js v$nodeVersion"
 } catch {
-    Write-Fail "Node.js nie znaleziony. Zainstaluj z https://nodejs.org (18+)"
+    Write-Fail 'Node.js nie znaleziony. Zainstaluj z https://nodejs.org (18+)'
 }
 
 # npm
@@ -66,7 +66,8 @@ try {
         Write-Warn "Dodaj do PATH:"
         Write-Host ""
         $binDir = Join-Path $env:USERPROFILE ".local\bin"
-        Write-Host "  [Environment]::SetEnvironmentVariable('PATH', `$env:PATH + ';$binDir', 'User')" -ForegroundColor Cyan
+        $pathCmd = '[Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";' + $binDir + '", "User")'
+        Write-Host "  $pathCmd" -ForegroundColor Cyan
         Write-Host ""
     } else {
         Write-Warn "Claude CLI nie znaleziony!"
