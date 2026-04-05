@@ -30,16 +30,16 @@ Joby dzialaja tylko gdy komputer nie spi. Najprostrza opcja na start.
 
 #### Krok 1 — Pobierz repo
 
-Otworz PowerShell i wklej:
+Otworz PowerShell, przejdz do folderu gdzie chcesz trzymac projekt i wklej:
 
 ```powershell
-git clone https://github.com/AIBiz-Automatyzacje/claude-cron-windows.git $env:USERPROFILE\claude-cron-windows
+git clone https://github.com/AIBiz-Automatyzacje/claude-cron-windows.git
+cd claude-cron-windows
 ```
 
 #### Krok 2 — Uruchom setup
 
 ```powershell
-cd $env:USERPROFILE\claude-cron-windows
 powershell -ExecutionPolicy Bypass -File setup-windows.ps1
 ```
 

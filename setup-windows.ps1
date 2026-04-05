@@ -197,8 +197,8 @@ if (-not $InstallHook) { $InstallHook = 'Y' }
 $HookInstalled = $false
 
 if ($InstallHook -match '^[Yy]$') {
-    # 1. Create hooks directory
-    $HooksDir = Join-Path $env:USERPROFILE '.claude\hooks'
+    # 1. Create hooks directory inside workspace
+    $HooksDir = Join-Path $Workspace '.claude\hooks'
     New-Item -ItemType Directory -Path $HooksDir -Force | Out-Null
 
     # 2. Write hook JS file
@@ -243,8 +243,8 @@ if ($InstallHook -match '^[Yy]$') {
     Set-Content -Path $HookFile -Value $hookContent -Encoding UTF8
     Write-Ok ('Hook: ' + $HookFile)
 
-    # 3. Register hook in settings.json
-    $SettingsFile = Join-Path $env:USERPROFILE '.claude\settings.json'
+    # 3. Register hook in workspace settings.json
+    $SettingsFile = Join-Path $Workspace '.claude\settings.json'
     $hookFileForward = $HookFile.Replace('\', '/')
     $hookCmd = 'node "' + $hookFileForward + '"'
 
