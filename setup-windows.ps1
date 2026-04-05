@@ -335,7 +335,7 @@ Write-Host ''
 Write-Host '  1. Otworz nowy terminal (zmienne zaczna dzialac)'
 Write-Host ''
 Write-Host '  2. Uruchom serwer:'
-Write-Host ('     cd ' + $RepoDir + '; node server.js') -ForegroundColor Cyan
+Write-Host ('     cd "' + $RepoDir + '"; node server.js') -ForegroundColor Cyan
 Write-Host ''
 Write-Host '  3. Otworz dashboard:'
 Write-Host '     http://localhost:7777' -ForegroundColor Cyan
