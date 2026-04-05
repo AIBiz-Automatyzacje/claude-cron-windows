@@ -272,14 +272,29 @@ if ($InstallHook -match '^[Yy]$') {
         $settings.hooks | Add-Member -NotePropertyName 'UserPromptSubmit' -NotePropertyValue @()
     }
 
-    # Check if already registered
-    $existing = @($settings.hooks.UserPromptSubmit) | Where-Object { $_.command -like '*claude-cron-autostart*' }
+    # Check if already registered (search nested hooks arrays)
+    $alreadyRegistered = $false
+    foreach ($item in @($settings.hooks.UserPromptSubmit)) {
+        if ($null -ne $item -and (Get-Member -InputObject $item -Name 'hooks' -MemberType NoteProperty)) {
+            foreach ($h in @($item.hooks)) {
+                if ($null -ne $h -and $h.command -like '*claude-cron-autostart*') {
+                    $alreadyRegistered = $true
+                }
+            }
+        }
+    }
 
-    if (-not $existing) {
-        $entry = New-Object PSObject
-        $entry | Add-Member -NotePropertyName 'type' -NotePropertyValue 'command'
-        $entry | Add-Member -NotePropertyName 'command' -NotePropertyValue $hookCmd
-        $settings.hooks.UserPromptSubmit = @(@($settings.hooks.UserPromptSubmit) + $entry)
+    if (-not $alreadyRegistered) {
+        # Claude Code hook format: matcher + hooks array
+        $hookEntry = New-Object PSObject
+        $hookEntry | Add-Member -NotePropertyName 'type' -NotePropertyValue 'command'
+        $hookEntry | Add-Member -NotePropertyName 'command' -NotePropertyValue $hookCmd
+
+        $matcherEntry = New-Object PSObject
+        $matcherEntry | Add-Member -NotePropertyName 'matcher' -NotePropertyValue ''
+        $matcherEntry | Add-Member -NotePropertyName 'hooks' -NotePropertyValue @($hookEntry)
+
+        $settings.hooks.UserPromptSubmit = @(@($settings.hooks.UserPromptSubmit) + $matcherEntry)
         $settings | ConvertTo-Json -Depth 10 | Set-Content $SettingsFile -Encoding UTF8
         Write-Ok 'Hook zarejestrowany w settings.json'
     }
