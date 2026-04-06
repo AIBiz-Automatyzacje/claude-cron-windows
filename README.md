@@ -159,6 +159,32 @@ Przegladaj wszystkie skille z filtrami: Project, User, Plugin.
 3. Kliknij **GENERATE WEBHOOK URL**
 4. Skopiuj URL i wklej go w zewnetrznym serwisie (Make, n8n, Zapier)
 
+### Wysylanie danych do joba
+
+Webhook akceptuje **POST z JSON body**. Cala zawartosc body trafia do Claude jako `webhook_payload` i mozesz sie do niej odwolac w prompcie joba.
+
+Przyklad — wyslanie hasla i tekstu:
+
+```bash
+curl -X POST "https://twoj-funnel.ts.net/webhook/<token>" \
+  -H "Content-Type: application/json" \
+  -d '{"haslo":"widzew","tekst":"Witaj swiecie"}'
+```
+
+Odpowiedz serwera:
+```json
+{"ok":true,"run_id":3,"job_name":"Test"}
+```
+
+W Make / n8n / Zapier ustaw:
+- **Method**: POST
+- **Headers**: `Content-Type: application/json`
+- **Body**: JSON z dowolnymi polami
+
+> Uwaga: query string (`?haslo=widzew`) **nie jest obslugiwany** — uzyj body.
+
+### Wymagania
+
 Webhoki dzialaja tylko jesli na VPS-ie wlaczyles **Tailscale Funnel**. Jesli nie, mozesz wlaczyc pozniej:
 
 ```bash
